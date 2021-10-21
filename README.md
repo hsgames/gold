@@ -1,0 +1,1 @@
+Gold is a kit library that makes the go standard and other library easier to use.
