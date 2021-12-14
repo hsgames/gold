@@ -3,7 +3,6 @@ package http
 import (
 	"github.com/hsgames/gold/log"
 	"io"
-	"io/ioutil"
 	"net/http"
 	stdurl "net/url"
 	"strings"
@@ -47,7 +46,7 @@ func (c *Client) Get(url string, data Form) ([]byte, error) {
 		return nil, err
 	}
 	defer res.Body.Close()
-	bs, err := ioutil.ReadAll(res.Body)
+	bs, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +64,7 @@ func (c *Client) Post(url string, contentType string, body io.Reader) ([]byte, e
 		return nil, err
 	}
 	defer resp.Body.Close()
-	bs, err := ioutil.ReadAll(resp.Body)
+	bs, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

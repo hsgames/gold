@@ -12,7 +12,7 @@ type Framework interface {
 	Destroy() error
 }
 
-func DefaultFileLogger() log.Logger {
+func DefaultLogger() log.Logger {
 	var (
 		logLevel      uint64
 		logDir        string
@@ -23,12 +23,6 @@ func DefaultFileLogger() log.Logger {
 	flag.BoolVar(&logAlsoStderr, "log_also_stderr", true, "log also stderr")
 	flag.Parse()
 	return log.NewFileLogger(logLevel, logDir, log.FileAlsoStderr(logAlsoStderr))
-}
-
-func DefaultStdLogger() log.Logger {
-	var logLevel uint64
-	flag.Uint64Var(&logLevel, "log_level", log.InfoLevel, "log level")
-	return log.NewStdLogger(logLevel)
 }
 
 func RunFramework(newFunc func(logger log.Logger) Framework, logger log.Logger) {

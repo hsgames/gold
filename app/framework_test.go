@@ -32,5 +32,5 @@ func (s *Server) Destroy() error {
 }
 
 func TestRunFramework(t *testing.T) {
-	app.RunFramework(NewServer, app.DefaultStdLogger())
+	app.RunFramework(NewServer, app.DefaultLogger())
 }

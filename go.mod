@@ -1,13 +1,19 @@
 module github.com/hsgames/gold
 
-go 1.14
+go 1.17
 
 require (
-	github.com/golang/protobuf v1.4.3
+	github.com/golang/protobuf v1.5.2
 	github.com/gorilla/websocket v1.4.2
 	github.com/pkg/errors v0.9.1
-	golang.org/x/net v0.0.0-20190620200207-3b0461eec859 // indirect
-	golang.org/x/sys v0.0.0-20190412213103-97732733099d // indirect
-	google.golang.org/grpc v1.35.0
-	gopkg.in/yaml.v2 v2.2.2
+	google.golang.org/grpc v1.42.0
+	gopkg.in/yaml.v2 v2.4.0
+)
+
+require (
+	golang.org/x/net v0.0.0-20200822124328-c89045814202 // indirect
+	golang.org/x/sys v0.0.0-20200323222414-85ca7c5b95cd // indirect
+	golang.org/x/text v0.3.0 // indirect
+	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
+	google.golang.org/protobuf v1.26.0 // indirect
 )
