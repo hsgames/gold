@@ -80,12 +80,12 @@ func (c *Conn) Name() string {
 	return c.name
 }
 
-func (c *Conn) LocalAddr() string {
-	return c.conn.LocalAddr().String()
+func (c *Conn) LocalAddr() net.Addr {
+	return c.conn.LocalAddr()
 }
 
-func (c *Conn) RemoteAddr() string {
-	return c.conn.RemoteAddr().String()
+func (c *Conn) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
 }
 
 func (c *Conn) EndPoint() goldnet.EndPoint {

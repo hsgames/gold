@@ -1,6 +1,9 @@
 package net
 
-import "github.com/hsgames/gold/log"
+import (
+	"github.com/hsgames/gold/log"
+	"net"
+)
 
 type NewHandlerFunc = func(log.Logger) Handler
 
@@ -8,8 +11,8 @@ type Conn interface {
 	Shutdown()
 	Close()
 	Write(data []byte)
-	LocalAddr() string
-	RemoteAddr() string
+	LocalAddr() net.Addr
+	RemoteAddr() net.Addr
 	EndPoint() EndPoint
 	UserData() interface{}
 	SetUserData(data interface{})
