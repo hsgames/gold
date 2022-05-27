@@ -9,7 +9,6 @@ import (
 	"github.com/hsgames/gold/net/internal"
 	"github.com/hsgames/gold/safe"
 	"github.com/pkg/errors"
-	"io"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -241,11 +240,7 @@ func (c *Conn) read() {
 		data, err := c.readMessage()
 		if err != nil {
 			if !c.isDone() {
-				if errors.Is(err, io.EOF) {
-					c.logger.Info("tcp: conn %s read message err: %v", c, err)
-				} else {
-					c.logger.Error("tcp: conn %s read message err: %+v", c, err)
-				}
+				c.logger.Info("tcp: conn %s read message err: %v", c, err)
 			}
 			return
 		}
