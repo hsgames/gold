@@ -16,6 +16,9 @@ type Conn interface {
 	EndPoint() EndPoint
 	UserData() interface{}
 	SetUserData(data interface{})
+	ReadBytes() uint64
+	WriteBytes() uint64
+	IsClosed() bool
 }
 
 type Handler interface {

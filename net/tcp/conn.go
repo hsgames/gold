@@ -32,6 +32,7 @@ type Conn struct {
 	bw             *bufio.Writer
 	readBytes      uint64
 	writeBytes     uint64
+	closed         int32
 	readDeadline   atomic.Value
 	shutdownOnce   sync.Once
 	closeOnce      sync.Once
@@ -100,8 +101,21 @@ func (c *Conn) SetUserData(data interface{}) {
 	c.userData = data
 }
 
+func (c *Conn) ReadBytes() uint64 {
+	return atomic.LoadUint64(&c.readBytes)
+}
+
+func (c *Conn) WriteBytes() uint64 {
+	return atomic.LoadUint64(&c.writeBytes)
+}
+
+func (c *Conn) IsClosed() bool {
+	return atomic.LoadInt32(&c.closed) == 1
+}
+
 func (c *Conn) Shutdown() {
 	c.shutdownOnce.Do(func() {
+		atomic.StoreInt32(&c.closed, 1)
 		c.shutdownChan <- struct{}{}
 	})
 }
@@ -122,6 +136,7 @@ func (c *Conn) Close() {
 
 func (c *Conn) close(noLinger bool) {
 	c.closeOnce.Do(func() {
+		atomic.StoreInt32(&c.closed, 1)
 		c.closeChan <- noLinger
 	})
 }
@@ -176,7 +191,7 @@ func (c *Conn) isDone() bool {
 }
 
 func (c *Conn) Write(data []byte) {
-	if len(data) == 0 {
+	if c.IsClosed() || len(data) == 0 {
 		return
 	}
 	c.writeQueue.Push(data)
@@ -286,11 +301,8 @@ func (c *Conn) write() {
 
 func (c *Conn) readMessage() ([]byte, error) {
 	if c.opts.readDeadlinePeriod > 0 {
-		var readDeadline time.Time
-		value := c.readDeadline.Load()
-		if value != nil {
-			readDeadline = value.(time.Time)
-		} else {
+		readDeadline, ok := c.readDeadline.Load().(time.Time)
+		if !ok {
 			readDeadline = time.Now().Add(c.opts.readDeadlinePeriod)
 		}
 		err := c.conn.SetReadDeadline(readDeadline)

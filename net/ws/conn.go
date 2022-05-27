@@ -27,8 +27,8 @@ type Conn struct {
 	writeQueue     *queue.MPSCQueue
 	readBytes      uint64
 	writeBytes     uint64
-	shutdownRead   bool
-	readDeadlineMu sync.Mutex
+	closed         int32
+	readDeadline   atomic.Value
 	shutdownOnce   sync.Once
 	closeOnce      sync.Once
 	shutdownChan   chan struct{}
@@ -86,8 +86,21 @@ func (c *Conn) SetUserData(data interface{}) {
 	c.userData = data
 }
 
+func (c *Conn) ReadBytes() uint64 {
+	return atomic.LoadUint64(&c.readBytes)
+}
+
+func (c *Conn) WriteBytes() uint64 {
+	return atomic.LoadUint64(&c.writeBytes)
+}
+
+func (c *Conn) IsClosed() bool {
+	return atomic.LoadInt32(&c.closed) == 1
+}
+
 func (c *Conn) Shutdown() {
 	c.shutdownOnce.Do(func() {
+		atomic.StoreInt32(&c.closed, 1)
 		c.shutdownChan <- struct{}{}
 	})
 }
@@ -108,6 +121,7 @@ func (c *Conn) Close() {
 
 func (c *Conn) close(noLinger bool) {
 	c.closeOnce.Do(func() {
+		atomic.StoreInt32(&c.closed, 1)
 		c.closeChan <- noLinger
 	})
 }
@@ -142,10 +156,9 @@ func (c *Conn) doCloseWrite() {
 			c, errors.WithStack(err))
 		return
 	}
-	c.readDeadlineMu.Lock()
-	c.shutdownRead = true
-	err = c.conn.SetReadDeadline(time.Now().Add(c.opts.shutdownReadPeriod))
-	c.readDeadlineMu.Unlock()
+	readDeadline := time.Now().Add(c.opts.shutdownReadPeriod)
+	c.readDeadline.Store(readDeadline)
+	err = c.conn.SetReadDeadline(readDeadline)
 	if err != nil {
 		c.Close()
 		c.logger.Error("ws: conn %s close write set read deadline err: %+v",
@@ -163,7 +176,7 @@ func (c *Conn) isDone() bool {
 }
 
 func (c *Conn) Write(data []byte) {
-	if len(data) == 0 {
+	if c.IsClosed() || len(data) == 0 {
 		return
 	}
 	c.writeQueue.Push(data)
@@ -247,12 +260,11 @@ func (c *Conn) write() {
 
 func (c *Conn) readMessage() ([]byte, error) {
 	if c.opts.readDeadlinePeriod > 0 {
-		var err error
-		c.readDeadlineMu.Lock()
-		if !c.shutdownRead {
-			err = c.conn.SetReadDeadline(time.Now().Add(c.opts.readDeadlinePeriod))
+		readDeadline, ok := c.readDeadline.Load().(time.Time)
+		if !ok {
+			readDeadline = time.Now().Add(c.opts.readDeadlinePeriod)
 		}
-		c.readDeadlineMu.Unlock()
+		err := c.conn.SetReadDeadline(readDeadline)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
