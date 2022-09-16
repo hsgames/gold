@@ -12,7 +12,7 @@ import (
 
 func NewTest1Middleware(logger log.Logger) grpc.Middleware {
 	return func(handler grpc.Handler) grpc.Handler {
-		logger.Info("Test1Middleware")
+		logger.Info("main: Test1Middleware run")
 		return handler
 	}
 }
@@ -35,12 +35,12 @@ func main() {
 		r, err := c.SayHello(ctx, &helloworld.HelloRequest{Name: "abc"})
 		if err != nil {
 			cancel()
-			logger.Info("rpc error %+v", err)
+			logger.Error("main: rpc error %+v", err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
 		cancel()
-		logger.Info("rpc response %s", r.Message)
+		logger.Info("main: rpc response %s", r.Message)
 		time.Sleep(1 * time.Second)
 	}
 }

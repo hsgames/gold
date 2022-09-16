@@ -13,14 +13,14 @@ import (
 
 func NewTest1Middleware(logger log.Logger) grpc.Middleware {
 	return func(h grpc.Handler) grpc.Handler {
-		logger.Info("Test1Middleware")
+		logger.Info("main: Test1Middleware run")
 		return h
 	}
 }
 
 func NewTest2Middleware(logger log.Logger) grpc.Middleware {
 	return func(h grpc.Handler) grpc.Handler {
-		logger.Info("Test2Middleware")
+		logger.Info("main: Test2Middleware run")
 		return h
 	}
 }

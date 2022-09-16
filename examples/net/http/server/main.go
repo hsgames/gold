@@ -11,14 +11,14 @@ import (
 
 func NewTest1Middleware(logger log.Logger) http.Middleware {
 	return func(h http.Handler) http.Handler {
-		logger.Info("Test1Middleware")
+		logger.Info("main: Test1Middleware run")
 		return h
 	}
 }
 
 func NewTest2Middleware(logger log.Logger) http.Middleware {
 	return func(h http.Handler) http.Handler {
-		logger.Info("NewTest2Middleware")
+		logger.Info("main: NewTest2Middleware run")
 		return h
 	}
 }
@@ -31,16 +31,13 @@ func main() {
 	s := http.NewServer("http_server", "tcp", "",
 		http.Handlers{
 			"/hello": func(w http.ResponseWriter, r *http.Request) {
-				logger.Info("hello")
 				w.Write([]byte("hello"))
 			},
 			"/world": func(w http.ResponseWriter, r *http.Request) {
-				logger.Info("world")
 				w.Write([]byte("world"))
 			},
 			"/app": func(w http.ResponseWriter, r *http.Request) {
 				name := r.FormValue("name")
-				logger.Info("app recv %s", name)
 				w.Write([]byte("hello " + name))
 			},
 		},
