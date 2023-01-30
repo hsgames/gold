@@ -14,7 +14,6 @@ type connOptions struct {
 	readBufSize          int
 	writeBufSize         int
 	keepAlivePeriod      time.Duration
-	readDeadlinePeriod   time.Duration
 	shutdownReadPeriod   time.Duration
 	shutdownWritePeriod  time.Duration
 }
@@ -118,12 +117,6 @@ func ServerKeepAlivePeriod(keepAlivePeriod time.Duration) ServerOption {
 	}
 }
 
-func ServerReadDeadlinePeriod(readDeadlinePeriod time.Duration) ServerOption {
-	return func(o *serverOptions) {
-		o.readDeadlinePeriod = readDeadlinePeriod
-	}
-}
-
 func ServerShutdownReadPeriod(shutdownReadPeriod time.Duration) ServerOption {
 	return func(o *serverOptions) {
 		o.shutdownReadPeriod = shutdownReadPeriod
@@ -205,12 +198,6 @@ func ClientWriteBufSize(writeBufSize int) ClientOption {
 func ClientKeepAlivePeriod(keepAlivePeriod time.Duration) ClientOption {
 	return func(o *clientOptions) {
 		o.keepAlivePeriod = keepAlivePeriod
-	}
-}
-
-func ClientReadDeadlinePeriod(readDeadlinePeriod time.Duration) ClientOption {
-	return func(o *clientOptions) {
-		o.readDeadlinePeriod = readDeadlinePeriod
 	}
 }
 

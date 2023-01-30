@@ -28,7 +28,6 @@ type Conn struct {
 	br             *bufio.Reader
 	bw             *bufio.Writer
 	closed         int32
-	readDeadline   atomic.Value
 	shutdownOnce   sync.Once
 	closeOnce      sync.Once
 	shutdownChan   chan struct{}
@@ -158,7 +157,6 @@ func (c *Conn) doCloseWrite() {
 		return
 	}
 	readDeadline := time.Now().Add(c.opts.shutdownReadPeriod)
-	c.readDeadline.Store(readDeadline)
 	err = c.conn.SetReadDeadline(readDeadline)
 	if err != nil {
 		c.Close()
@@ -275,16 +273,6 @@ func (c *Conn) write() {
 }
 
 func (c *Conn) readMessage() ([]byte, error) {
-	if c.opts.readDeadlinePeriod > 0 {
-		readDeadline, ok := c.readDeadline.Load().(time.Time)
-		if !ok {
-			readDeadline = time.Now().Add(c.opts.readDeadlinePeriod)
-		}
-		err := c.conn.SetReadDeadline(readDeadline)
-		if err != nil {
-			return nil, errors.WithStack(err)
-		}
-	}
 	return c.parser.ReadMessage(c.br, c.opts.maxReadMsgSize)
 }
 

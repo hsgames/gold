@@ -93,7 +93,9 @@ func (a *App) Run() error {
 	shutdownCh := make(chan os.Signal, 1)
 	signal.Notify(shutdownCh, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGINT)
 	userSigCh := make(chan os.Signal, 1)
-	signal.Notify(userSigCh, a.opts.sigs...)
+	if len(a.opts.sigs) > 0 {
+		signal.Notify(userSigCh, a.opts.sigs...)
+	}
 	for {
 		select {
 		case err = <-errChan:
@@ -106,12 +108,14 @@ func (a *App) Run() error {
 				goto end
 			}
 		case sig := <-userSigCh:
-			err = func() error {
-				defer safe.Recover(a.logger)
-				return a.opts.sigHandler(a, sig)
-			}()
-			if err != nil {
-				goto end
+			if a.opts.sigHandler != nil {
+				err = func() error {
+					defer safe.Recover(a.logger)
+					return a.opts.sigHandler(a, sig)
+				}()
+				if err != nil {
+					goto end
+				}
 			}
 		}
 	}

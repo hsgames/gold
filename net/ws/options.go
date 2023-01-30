@@ -19,7 +19,6 @@ type connOptions struct {
 	maxWriteMsgSize      int
 	msgType              int
 	keepAlivePeriod      time.Duration
-	readDeadlinePeriod   time.Duration
 	shutdownReadPeriod   time.Duration
 	shutdownWritePeriod  time.Duration
 }
@@ -116,12 +115,6 @@ func ServerMsgType(msgType int) ServerOption {
 func ServerKeepAlivePeriod(keepAlivePeriod time.Duration) ServerOption {
 	return func(o *serverOptions) {
 		o.keepAlivePeriod = keepAlivePeriod
-	}
-}
-
-func ServerReadDeadlinePeriod(readDeadlinePeriod time.Duration) ServerOption {
-	return func(o *serverOptions) {
-		o.readDeadlinePeriod = readDeadlinePeriod
 	}
 }
 
@@ -232,12 +225,6 @@ func ClientMsgType(msgType int) ClientOption {
 func ClientKeepAlivePeriod(keepAlivePeriod time.Duration) ClientOption {
 	return func(o *clientOptions) {
 		o.keepAlivePeriod = keepAlivePeriod
-	}
-}
-
-func ClientReadDeadlinePeriod(readDeadlinePeriod time.Duration) ClientOption {
-	return func(o *clientOptions) {
-		o.readDeadlinePeriod = readDeadlinePeriod
 	}
 }
 

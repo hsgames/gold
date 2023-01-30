@@ -18,6 +18,9 @@ func defaultOptions() options {
 }
 
 func (opts *options) ensure() {
+	if len(opts.sigs) > 0 && opts.sigHandler == nil {
+		panic("app: options sigHandler is nil")
+	}
 }
 
 type Option func(o *options)
