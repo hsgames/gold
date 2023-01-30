@@ -6,7 +6,6 @@ import (
 	"github.com/hsgames/gold/container/queue"
 	"github.com/hsgames/gold/log"
 	goldnet "github.com/hsgames/gold/net"
-	"github.com/hsgames/gold/net/internal"
 	"github.com/hsgames/gold/safe"
 	"github.com/pkg/errors"
 	"net"
@@ -23,14 +22,11 @@ type Conn struct {
 	wg             sync.WaitGroup
 	parser         Parser
 	handler        goldnet.Handler
-	defender       *internal.Defender
 	writeQueue     *queue.MPSCQueue
 	brPool         *sync.Pool
 	bwPool         *sync.Pool
 	br             *bufio.Reader
 	bw             *bufio.Writer
-	readBytes      uint64
-	writeBytes     uint64
 	closed         int32
 	readDeadline   atomic.Value
 	shutdownOnce   sync.Once
@@ -57,7 +53,6 @@ func newConn(name string, conn net.Conn, ep goldnet.EndPoint,
 		ep:             ep,
 		parser:         newParser(logger),
 		handler:        newHandler(logger),
-		defender:       internal.NewDefender(opts.maxDefenderMsgNum),
 		writeQueue:     queue.NewMPSCQueue(opts.maxWriteQueueSize, opts.writeQueueShrinkSize),
 		brPool:         brPool,
 		bwPool:         bwPool,
@@ -98,14 +93,6 @@ func (c *Conn) UserData() interface{} {
 
 func (c *Conn) SetUserData(data interface{}) {
 	c.userData = data
-}
-
-func (c *Conn) ReadBytes() uint64 {
-	return atomic.LoadUint64(&c.readBytes)
-}
-
-func (c *Conn) WriteBytes() uint64 {
-	return atomic.LoadUint64(&c.writeBytes)
 }
 
 func (c *Conn) IsClosed() bool {
@@ -244,11 +231,6 @@ func (c *Conn) read() {
 			}
 			return
 		}
-		atomic.AddUint64(&c.readBytes, uint64(len(data)))
-		if !c.defender.CheckPacketSpeed() {
-			c.logger.Error("tcp: conn %s defender check packet speed", c)
-			return
-		}
 		err = c.handler.OnMessage(c, data)
 		if err != nil {
 			c.logger.Error("tcp: conn %s handler on message err: %+v", c, err)
@@ -261,7 +243,6 @@ func (c *Conn) write() {
 	defer c.wg.Done()
 	defer c.closeWrite()
 	var (
-		n    int
 		err  error
 		exit bool
 	)
@@ -272,14 +253,13 @@ func (c *Conn) write() {
 				exit = true
 				break
 			}
-			n, err = c.writeMessage(data.([]byte))
+			_, err = c.writeMessage(data.([]byte))
 			if err != nil {
 				if !c.isDone() {
 					c.logger.Error("tcp: conn %s buffer write err: %+v", c, err)
 				}
 				return
 			}
-			atomic.AddUint64(&c.writeBytes, uint64(n))
 		}
 		err = c.bw.Flush()
 		if err != nil {

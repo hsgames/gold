@@ -9,7 +9,6 @@ import (
 type connOptions struct {
 	maxWriteQueueSize    int
 	writeQueueShrinkSize int
-	maxDefenderMsgNum    int
 	maxReadMsgSize       int
 	maxWriteMsgSize      int
 	readBufSize          int
@@ -86,12 +85,6 @@ func ServerMaxWriteQueueSize(maxWriteQueueSize int) ServerOption {
 func ServerWriteQueueShrinkSize(writeQueueShrinkSize int) ServerOption {
 	return func(o *serverOptions) {
 		o.writeQueueShrinkSize = writeQueueShrinkSize
-	}
-}
-
-func ServerMaxDefenderMsgNum(maxDefenderMsgNum int) ServerOption {
-	return func(o *serverOptions) {
-		o.maxDefenderMsgNum = maxDefenderMsgNum
 	}
 }
 
@@ -185,13 +178,6 @@ func ClientWriteQueueShrinkSize(writeQueueShrinkSize int) ServerOption {
 		o.writeQueueShrinkSize = writeQueueShrinkSize
 	}
 }
-
-func ClientMaxDefenderMsgNum(maxDefenderMsgNum int) ClientOption {
-	return func(o *clientOptions) {
-		o.maxDefenderMsgNum = maxDefenderMsgNum
-	}
-}
-
 func ClientMaxReadMsgSize(maxReadMsgSize int) ClientOption {
 	return func(o *clientOptions) {
 		o.maxReadMsgSize = maxReadMsgSize

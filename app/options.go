@@ -2,11 +2,11 @@ package app
 
 import (
 	"os"
-	"syscall"
 	"time"
 )
 
-type SignalHandler func(a *App, sig os.Signal) (done bool)
+// SignalHandler if return error, the app will be shutdown
+type SignalHandler func(a *App, sig os.Signal) error
 
 type options struct {
 	sigs       []os.Signal
@@ -14,51 +14,19 @@ type options struct {
 }
 
 func defaultOptions() options {
-	return options{
-		sigs: []os.Signal{
-			syscall.SIGTERM,
-			syscall.SIGQUIT,
-			syscall.SIGINT,
-		},
-		sigHandler: func(a *App, sig os.Signal) bool {
-			switch sig {
-			case syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGINT:
-				a.logger.Info("app: handle shutdown signal: %s", sig)
-				return true
-			default:
-				a.logger.Info("app: unhandled signal: %s", sig)
-				return false
-			}
-		},
-	}
+	return options{}
 }
 
 func (opts *options) ensure() {
-	if opts.sigHandler == nil {
-		panic("app: options sigHandler == nil")
-	}
 }
 
 type Option func(o *options)
 
-func AddSignals(sigs ...os.Signal) Option {
+func SetUserSignals(handler SignalHandler, sigs ...os.Signal) Option {
 	return func(o *options) {
-		m := make(map[os.Signal]struct{})
-		for _, v := range o.sigs {
-			m[v] = struct{}{}
-		}
-		for _, v := range sigs {
-			if _, ok := m[v]; !ok {
-				m[v] = struct{}{}
-				o.sigs = append(o.sigs, v)
-			}
-		}
-	}
-}
-
-func SetSignalHandler(sigHandler SignalHandler) Option {
-	return func(o *options) {
-		o.sigHandler = sigHandler
+		o.sigs = o.sigs[0:0]
+		o.sigs = append(o.sigs, sigs...)
+		o.sigHandler = handler
 	}
 }
 

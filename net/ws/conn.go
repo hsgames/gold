@@ -6,7 +6,6 @@ import (
 	"github.com/hsgames/gold/container/queue"
 	"github.com/hsgames/gold/log"
 	goldnet "github.com/hsgames/gold/net"
-	"github.com/hsgames/gold/net/internal"
 	"github.com/hsgames/gold/safe"
 	"github.com/pkg/errors"
 	"net"
@@ -22,10 +21,7 @@ type Conn struct {
 	ep             goldnet.EndPoint
 	wg             sync.WaitGroup
 	handler        goldnet.Handler
-	defender       *internal.Defender
 	writeQueue     *queue.MPSCQueue
-	readBytes      uint64
-	writeBytes     uint64
 	closed         int32
 	readDeadline   atomic.Value
 	shutdownOnce   sync.Once
@@ -46,7 +42,6 @@ func newConn(name string, conn *websocket.Conn, ep goldnet.EndPoint,
 		conn:           conn,
 		ep:             ep,
 		handler:        newHandler(logger),
-		defender:       internal.NewDefender(opts.maxDefenderMsgNum),
 		writeQueue:     queue.NewMPSCQueue(opts.maxWriteQueueSize, opts.writeQueueShrinkSize),
 		shutdownChan:   make(chan struct{}, 1),
 		closeWriteChan: make(chan struct{}, 1),
@@ -83,14 +78,6 @@ func (c *Conn) UserData() interface{} {
 
 func (c *Conn) SetUserData(data interface{}) {
 	c.userData = data
-}
-
-func (c *Conn) ReadBytes() uint64 {
-	return atomic.LoadUint64(&c.readBytes)
-}
-
-func (c *Conn) WriteBytes() uint64 {
-	return atomic.LoadUint64(&c.writeBytes)
 }
 
 func (c *Conn) IsClosed() bool {
@@ -219,11 +206,6 @@ func (c *Conn) read() {
 			}
 			return
 		}
-		atomic.AddUint64(&c.readBytes, uint64(len(data)))
-		if !c.defender.CheckPacketSpeed() {
-			c.logger.Error("ws: conn %s defender check packet speed", c)
-			return
-		}
 		err = c.handler.OnMessage(c, data)
 		if err != nil {
 			c.logger.Error("ws: conn %s handler on message err: %+v", c, err)
@@ -241,14 +223,13 @@ func (c *Conn) write() {
 			if data == nil {
 				return
 			}
-			n, err := c.writeMessage(data.([]byte))
+			_, err := c.writeMessage(data.([]byte))
 			if err != nil {
 				if !c.isDone() {
 					c.logger.Error("ws: conn %s write err: %+v", c, err)
 				}
 				return
 			}
-			atomic.AddUint64(&c.writeBytes, uint64(n))
 		}
 	}
 }
