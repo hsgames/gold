@@ -134,6 +134,6 @@ func (s *Server) Shutdown() {
 	s.serveWg.Wait()
 }
 
-func (s *Server) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
+func (s *Server) RegisterService(desc *grpc.ServiceDesc, impl any) {
 	s.server.RegisterService(desc, impl)
 }

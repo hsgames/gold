@@ -12,7 +12,7 @@ import (
 type Handler interface {
 	OnInit(*timer.Manager) error
 	OnDestroy()
-	OnMessage(interface{})
+	OnMessage(any)
 }
 
 type Worker struct {
@@ -20,7 +20,7 @@ type Worker struct {
 	tm       *timer.Manager
 	name     string
 	handler  Handler
-	msgChan  chan interface{}
+	msgChan  chan any
 	doneChan chan struct{}
 	doneOnce sync.Once
 	shutdown bool
@@ -44,7 +44,7 @@ func NewWorker(name string, handler Handler, logger log.Logger, opt ...WorkerOpt
 		tm:       timer.NewManager(logger),
 		name:     name,
 		handler:  handler,
-		msgChan:  make(chan interface{}, opts.msgChanSize),
+		msgChan:  make(chan any, opts.msgChanSize),
 		doneChan: make(chan struct{}),
 		logger:   logger,
 	}
@@ -97,7 +97,7 @@ func (w *Worker) Run() (err error) {
 	}
 }
 
-func (w *Worker) Push(m interface{}) {
+func (w *Worker) Push(m any) {
 	select {
 	case w.msgChan <- m:
 	case <-w.doneChan:

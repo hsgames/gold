@@ -5,8 +5,8 @@ import (
 )
 
 type MPSCQueue struct {
-	in         []interface{}
-	out        []interface{}
+	in         []any
+	out        []any
 	mu         sync.Mutex
 	cond       *sync.Cond
 	maxSize    int
@@ -23,7 +23,7 @@ func NewMPSCQueue(maxSize, shrinkSize int) *MPSCQueue {
 	return q
 }
 
-func (q *MPSCQueue) Push(data interface{}) {
+func (q *MPSCQueue) Push(data any) {
 	q.mu.Lock()
 	if q.closed {
 		q.mu.Unlock()
@@ -38,7 +38,7 @@ func (q *MPSCQueue) Push(data interface{}) {
 	q.cond.Signal()
 }
 
-func (q *MPSCQueue) Pop() *[]interface{} {
+func (q *MPSCQueue) Pop() *[]any {
 	q.clearOrShrinkOut()
 	q.mu.Lock()
 	for len(q.in) == 0 {
@@ -59,6 +59,6 @@ func (q *MPSCQueue) clearOrShrinkOut() {
 	if q.shrinkSize == 0 || cap(q.out) < q.shrinkSize {
 		q.out = q.out[0:0]
 	} else {
-		q.out = []interface{}{}
+		q.out = []any{}
 	}
 }

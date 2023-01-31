@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-func LoadConf(dir string, out interface{}) error {
-	var unmarshal func([]byte, interface{}) error
+func LoadConf(dir string, out any) error {
+	var unmarshal func([]byte, any) error
 	if strings.HasSuffix(dir, ".yaml") {
 		unmarshal = yaml.Unmarshal
 	} else if strings.HasSuffix(dir, ".json") {

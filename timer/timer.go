@@ -31,14 +31,14 @@ func (q Queue) Swap(i, j int) {
 	q[j].index = j
 }
 
-func (q *Queue) Push(x interface{}) {
+func (q *Queue) Push(x any) {
 	n := len(*q)
 	timer := x.(*Timer)
 	timer.index = n
 	*q = append(*q, timer)
 }
 
-func (q *Queue) Pop() interface{} {
+func (q *Queue) Pop() any {
 	old := *q
 	n := len(old)
 	timer := old[n-1]

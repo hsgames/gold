@@ -29,7 +29,7 @@ func (h *Handler) OnDestroy() {
 	h.logger.Info("handler destroy")
 }
 
-func (h *Handler) OnMessage(m interface{}) {
+func (h *Handler) OnMessage(m any) {
 	h.logger.Info("handler on message %#v", m)
 }
 

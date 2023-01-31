@@ -14,8 +14,8 @@ type Conn interface {
 	LocalAddr() net.Addr
 	RemoteAddr() net.Addr
 	EndPoint() EndPoint
-	UserData() interface{}
-	SetUserData(data interface{})
+	UserData() any
+	SetUserData(data any)
 	IsClosed() bool
 }
 

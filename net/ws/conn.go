@@ -29,7 +29,7 @@ type Conn struct {
 	closeWriteChan chan struct{}
 	closeChan      chan bool
 	doneChan       chan struct{}
-	userData       interface{}
+	userData       any
 	logger         log.Logger
 }
 
@@ -71,11 +71,11 @@ func (c *Conn) EndPoint() goldnet.EndPoint {
 	return c.ep
 }
 
-func (c *Conn) UserData() interface{} {
+func (c *Conn) UserData() any {
 	return c.userData
 }
 
-func (c *Conn) SetUserData(data interface{}) {
+func (c *Conn) SetUserData(data any) {
 	c.userData = data
 }
 

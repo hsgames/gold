@@ -7,13 +7,13 @@ import (
 	"google.golang.org/grpc"
 )
 
-type Handler func(ctx context.Context, req interface{}) (resp interface{}, err error)
+type Handler func(ctx context.Context, req any) (resp any, err error)
 
 type Middleware func(Handler) Handler
 
 func NewRecoverMiddleware(logger log.Logger) Middleware {
 	return func(h Handler) Handler {
-		return func(ctx context.Context, req interface{}) (resp interface{}, err error) {
+		return func(ctx context.Context, req any) (resp any, err error) {
 			defer func() {
 				if err != nil && logger != nil {
 					logger.Error("grpc: recover middleware err:%+v", err)
@@ -28,7 +28,7 @@ func NewRecoverMiddleware(logger log.Logger) Middleware {
 
 func NewContextMiddleware(logger log.Logger) Middleware {
 	return func(h Handler) Handler {
-		return func(ctx context.Context, req interface{}) (resp interface{}, err error) {
+		return func(ctx context.Context, req any) (resp any, err error) {
 			defer func() {
 				if err != nil && logger != nil {
 					logger.Error("grpc: context middleware err:%+v", err)
@@ -46,9 +46,9 @@ func NewContextMiddleware(logger log.Logger) Middleware {
 }
 
 func UnaryServerInterceptor(m Middleware) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{},
-		info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		h := func(ctx context.Context, req interface{}) (interface{}, error) {
+	return func(ctx context.Context, req any,
+		info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		h := func(ctx context.Context, req any) (any, error) {
 			return handler(ctx, req)
 		}
 		if m != nil {
@@ -63,9 +63,9 @@ func UnaryServerInterceptor(m Middleware) grpc.UnaryServerInterceptor {
 }
 
 func UnaryClientInterceptor(m Middleware) grpc.UnaryClientInterceptor {
-	return func(ctx context.Context, method string, req, reply interface{},
+	return func(ctx context.Context, method string, req, reply any,
 		cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-		h := func(ctx context.Context, req interface{}) (interface{}, error) {
+		h := func(ctx context.Context, req any) (any, error) {
 			return reply, invoker(ctx, method, req, reply, cc, opts...)
 		}
 		if m != nil {

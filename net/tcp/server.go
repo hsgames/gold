@@ -52,12 +52,12 @@ func NewServer(name, network, addr string, newParser NewParserFunc,
 		newParser:  newParser,
 		newHandler: newHandler,
 		brPool: &sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				return bufio.NewReaderSize(nil, opts.readBufSize)
 			},
 		},
 		bwPool: &sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				return bufio.NewWriterSize(nil, opts.writeBufSize)
 			},
 		},

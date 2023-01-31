@@ -45,10 +45,10 @@ func init() {
 type Logger interface {
 	Shutdown()
 	SetLevel(level uint64)
-	Debug(format string, v ...interface{})
-	Info(format string, v ...interface{})
-	Warn(format string, v ...interface{})
-	Error(format string, v ...interface{})
+	Debug(format string, v ...any)
+	Info(format string, v ...any)
+	Warn(format string, v ...any)
+	Error(format string, v ...any)
 }
 
 type handler interface {
@@ -76,26 +76,26 @@ func (l *logger) SetLevel(level uint64) {
 	atomic.StoreUint64(&l.level, level)
 }
 
-func fmtLog(format string, v ...interface{}) string {
+func fmtLog(format string, v ...any) string {
 	if len(v) == 0 {
 		return format
 	}
 	return fmt.Sprintf(format, v...)
 }
 
-func (l *logger) Debug(format string, v ...interface{}) {
+func (l *logger) Debug(format string, v ...any) {
 	l.output(DebugLevel, 2, fmtLog(format, v...))
 }
 
-func (l *logger) Info(format string, v ...interface{}) {
+func (l *logger) Info(format string, v ...any) {
 	l.output(InfoLevel, 2, fmtLog(format, v...))
 }
 
-func (l *logger) Warn(format string, v ...interface{}) {
+func (l *logger) Warn(format string, v ...any) {
 	l.output(WarnLevel, 2, fmtLog(format, v...))
 }
 
-func (l *logger) Error(format string, v ...interface{}) {
+func (l *logger) Error(format string, v ...any) {
 	l.output(ErrorLevel, 2, fmtLog(format, v...))
 }
 
