@@ -1,75 +1,42 @@
 package app
 
-import (
-	"os"
-	"time"
-)
+import "os"
 
-// SignalHandler if return error, the app will be shutdown
-type SignalHandler func(a *App, sig os.Signal) error
+type Option func(*App)
 
-type options struct {
-	sigs       []os.Signal
-	sigHandler SignalHandler
-}
-
-func defaultOptions() options {
-	return options{}
-}
-
-func (opts *options) ensure() {
-	if len(opts.sigs) > 0 && opts.sigHandler == nil {
-		panic("app: options sigHandler is nil")
+func WithSignals(signals ...os.Signal) Option {
+	return func(a *App) {
+		clear(a.signals)
+		a.signals = append(a.signals, signals...)
 	}
 }
 
-type Option func(o *options)
-
-func SetUserSignals(handler SignalHandler, sigs ...os.Signal) Option {
-	return func(o *options) {
-		o.sigs = o.sigs[0:0]
-		o.sigs = append(o.sigs, sigs...)
-		o.sigHandler = handler
+func WithServices(services ...Service) Option {
+	return func(a *App) {
+		a.services = append(a.services, services...)
 	}
 }
 
-type workerOptions struct {
-	msgChanSize    int
-	tickerDuration time.Duration
-	tickerLimit    int
-}
-
-func defaultWorkerOptions() workerOptions {
-	ops := workerOptions{
-		msgChanSize:    2000,
-		tickerDuration: time.Second,
-		tickerLimit:    0,
-	}
-	return ops
-}
-
-func (opts *workerOptions) ensure() {
-	if opts.tickerDuration <= 10*time.Millisecond {
-		panic("app: workerOptions tickerDuration <= 10 ms")
+func PreStart(f func() error) Option {
+	return func(a *App) {
+		a.preStart = append(a.preStart, f)
 	}
 }
 
-type WorkerOption func(o *workerOptions)
-
-func WorkerMsgChanSize(msgChanSize int) WorkerOption {
-	return func(o *workerOptions) {
-		o.msgChanSize = msgChanSize
+func PostStart(f func() error) Option {
+	return func(a *App) {
+		a.postStart = append(a.postStart, f)
 	}
 }
 
-func WorkerTickerDuration(tickerDuration time.Duration) WorkerOption {
-	return func(o *workerOptions) {
-		o.tickerDuration = tickerDuration
+func PreStop(f func() error) Option {
+	return func(a *App) {
+		a.preStop = append(a.preStop, f)
 	}
 }
 
-func WorkerTickerLimit(tickerLimit int) WorkerOption {
-	return func(o *workerOptions) {
-		o.tickerLimit = tickerLimit
+func PostStop(f func() error) Option {
+	return func(a *App) {
+		a.postStop = append(a.postStop, f)
 	}
 }

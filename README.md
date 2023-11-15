@@ -1,1 +1,1 @@
-Gold is a kit library that makes the go standard and other libraries easier to use.
+Gold(Au) is a kit library that makes the go standard and other libraries easier to use.

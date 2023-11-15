@@ -7,226 +7,85 @@ import (
 )
 
 type connOptions struct {
-	maxWriteQueueSize    int
-	writeQueueShrinkSize int
-	maxReadMsgSize       int
-	maxWriteMsgSize      int
-	readBufSize          int
-	writeBufSize         int
-	keepAlivePeriod      time.Duration
-	shutdownReadPeriod   time.Duration
-	shutdownWritePeriod  time.Duration
+	writeChanSize   int
+	maxReadMsgSize  int
+	maxWriteMsgSize int
+	keepAlivePeriod time.Duration
+	newReader       func() Reader
+	newWriter       func() Writer
 }
 
-func defaultConnOptions() connOptions {
-	opts := connOptions{
-		maxWriteQueueSize:    0,
-		writeQueueShrinkSize: 1024 * 1024,
-		maxReadMsgSize:       math.MaxUint16,
-		maxWriteMsgSize:      math.MaxUint16,
-		readBufSize:          math.MaxUint16,
-		writeBufSize:         math.MaxUint16,
-		keepAlivePeriod:      3 * time.Minute,
-		shutdownReadPeriod:   5 * time.Second,
-		shutdownWritePeriod:  30 * time.Second,
-	}
-	return opts
-}
-
-func (opts *connOptions) ensure() {
-	if opts.maxReadMsgSize <= 0 {
-		panic(fmt.Sprintf("tcp: connOptions maxReadMsgSize:%d <= 0", opts.maxReadMsgSize))
-	}
-	if opts.maxWriteMsgSize <= 0 {
-		panic(fmt.Sprintf("tcp: connOptions maxWriteMsgSize:%d <= 0", opts.maxWriteMsgSize))
-	}
-	if opts.readBufSize < opts.maxReadMsgSize {
-		panic(fmt.Sprintf("tcp: connOptions readBufSize:%d < maxReadMsgSize:%d",
-			opts.readBufSize, opts.maxReadMsgSize))
-	}
-	if opts.writeBufSize < opts.maxWriteMsgSize {
-		panic(fmt.Sprintf("tcp: connOptions writeBufSize:%d < maxWriteMsgSize:%d",
-			opts.writeBufSize, opts.maxWriteMsgSize))
-	}
-	if opts.shutdownReadPeriod <= 0 {
-		panic(fmt.Sprintf("tcp: connOptions shutdownReadPeriod:%d <= 0",
-			opts.shutdownReadPeriod))
-	}
-	if opts.shutdownWritePeriod <= 0 {
-		panic(fmt.Sprintf("tcp: connOptions shutdownWritePeriod:%d <= 0",
-			opts.shutdownWritePeriod))
-	}
-}
-
-type serverOptions struct {
+type options struct {
 	connOptions
+
 	maxConnNum int
 }
 
-func defaultServerOptions() serverOptions {
-	return serverOptions{
-		connOptions: defaultConnOptions(),
+func defaultOptions() options {
+	return options{
+		connOptions: connOptions{
+			writeChanSize:   200,
+			maxReadMsgSize:  math.MaxUint16,
+			maxWriteMsgSize: math.MaxUint16,
+			keepAlivePeriod: 3 * time.Minute,
+			newReader:       defaultReader,
+			newWriter:       defaultWriter,
+		},
 	}
 }
 
-func (opts *serverOptions) ensure() {
-	opts.connOptions.ensure()
+func (o *options) check() error {
+	if o.maxReadMsgSize <= 0 {
+		return fmt.Errorf("tcp: options maxReadMsgSize [%d] <= 0", o.maxReadMsgSize)
+	}
+
+	if o.maxWriteMsgSize <= 0 {
+		return fmt.Errorf("tcp: options maxWriteMsgSize [%d] <= 0", o.maxWriteMsgSize)
+	}
+
+	return nil
 }
 
-type ServerOption func(o *serverOptions)
+type Option func(o *options)
 
-func ServerMaxWriteQueueSize(maxWriteQueueSize int) ServerOption {
-	return func(o *serverOptions) {
-		o.maxWriteQueueSize = maxWriteQueueSize
+func WithWriteChanSize(writeChanSize int) Option {
+	return func(o *options) {
+		o.writeChanSize = writeChanSize
 	}
 }
 
-func ServerWriteQueueShrinkSize(writeQueueShrinkSize int) ServerOption {
-	return func(o *serverOptions) {
-		o.writeQueueShrinkSize = writeQueueShrinkSize
-	}
-}
-
-func ServerMaxReadMsgSize(maxReadMsgSize int) ServerOption {
-	return func(o *serverOptions) {
+func WithMaxReadMsgSize(maxReadMsgSize int) Option {
+	return func(o *options) {
 		o.maxReadMsgSize = maxReadMsgSize
 	}
 }
 
-func ServerMaxWriteMsgSize(maxWriteMsgSize int) ServerOption {
-	return func(o *serverOptions) {
+func WithMaxWriteMsgSize(maxWriteMsgSize int) Option {
+	return func(o *options) {
 		o.maxWriteMsgSize = maxWriteMsgSize
 	}
 }
 
-func ServerReadBufSize(readBufSize int) ServerOption {
-	return func(o *serverOptions) {
-		o.readBufSize = readBufSize
-	}
-}
-
-func ServerWriteBufSize(writeBufSize int) ServerOption {
-	return func(o *serverOptions) {
-		o.writeBufSize = writeBufSize
-	}
-}
-
-func ServerKeepAlivePeriod(keepAlivePeriod time.Duration) ServerOption {
-	return func(o *serverOptions) {
+func WithKeepAlivePeriod(keepAlivePeriod time.Duration) Option {
+	return func(o *options) {
 		o.keepAlivePeriod = keepAlivePeriod
 	}
 }
 
-func ServerShutdownReadPeriod(shutdownReadPeriod time.Duration) ServerOption {
-	return func(o *serverOptions) {
-		o.shutdownReadPeriod = shutdownReadPeriod
+func WithReader(newReader func() Reader) Option {
+	return func(o *options) {
+		o.newReader = newReader
 	}
 }
 
-func ServerShutdownWritePeriod(shutdownWritePeriod time.Duration) ServerOption {
-	return func(o *serverOptions) {
-		o.shutdownWritePeriod = shutdownWritePeriod
+func WithWriter(newWriter func() Writer) Option {
+	return func(o *options) {
+		o.newWriter = newWriter
 	}
 }
 
-func ServerMaxConnNum(maxConnNum int) ServerOption {
-	return func(o *serverOptions) {
+func WithMaxConnNum(maxConnNum int) Option {
+	return func(o *options) {
 		o.maxConnNum = maxConnNum
-	}
-}
-
-type clientOptions struct {
-	connOptions
-	autoRedial     bool
-	redialInterval time.Duration
-	dialTimeout    time.Duration
-}
-
-func defaultClientOptions() clientOptions {
-	return clientOptions{
-		connOptions:    defaultConnOptions(),
-		autoRedial:     true,
-		redialInterval: 3 * time.Second,
-		dialTimeout:    3 * time.Second,
-	}
-}
-
-func (opts *clientOptions) ensure() {
-	opts.connOptions.ensure()
-	if opts.autoRedial && opts.redialInterval <= 0 {
-		panic("tcp: clientOptions redialInterval <= 0")
-	}
-}
-
-type ClientOption func(o *clientOptions)
-
-func ClientMaxWriteQueueSize(maxWriteQueueSize int) ServerOption {
-	return func(o *serverOptions) {
-		o.maxWriteQueueSize = maxWriteQueueSize
-	}
-}
-
-func ClientWriteQueueShrinkSize(writeQueueShrinkSize int) ServerOption {
-	return func(o *serverOptions) {
-		o.writeQueueShrinkSize = writeQueueShrinkSize
-	}
-}
-func ClientMaxReadMsgSize(maxReadMsgSize int) ClientOption {
-	return func(o *clientOptions) {
-		o.maxReadMsgSize = maxReadMsgSize
-	}
-}
-
-func ClientMaxWriteMsgSize(maxWriteMsgSize int) ClientOption {
-	return func(o *clientOptions) {
-		o.maxWriteMsgSize = maxWriteMsgSize
-	}
-}
-
-func ClientReadBufSize(readBufSize int) ClientOption {
-	return func(o *clientOptions) {
-		o.readBufSize = readBufSize
-	}
-}
-
-func ClientWriteBufSize(writeBufSize int) ClientOption {
-	return func(o *clientOptions) {
-		o.writeBufSize = writeBufSize
-	}
-}
-
-func ClientKeepAlivePeriod(keepAlivePeriod time.Duration) ClientOption {
-	return func(o *clientOptions) {
-		o.keepAlivePeriod = keepAlivePeriod
-	}
-}
-
-func ClientShutdownReadPeriod(shutdownReadPeriod time.Duration) ClientOption {
-	return func(o *clientOptions) {
-		o.shutdownReadPeriod = shutdownReadPeriod
-	}
-}
-
-func ClientShutdownWritePeriod(shutdownWritePeriod time.Duration) ClientOption {
-	return func(o *clientOptions) {
-		o.shutdownWritePeriod = shutdownWritePeriod
-	}
-}
-
-func ClientAutoRedial(autoRedial bool) ClientOption {
-	return func(o *clientOptions) {
-		o.autoRedial = autoRedial
-	}
-}
-
-func ClientRedialInterval(redialInterval time.Duration) ClientOption {
-	return func(o *clientOptions) {
-		o.redialInterval = redialInterval
-	}
-}
-
-func ClientDialTimeout(dialTimeout time.Duration) ClientOption {
-	return func(o *clientOptions) {
-		o.dialTimeout = dialTimeout
 	}
 }

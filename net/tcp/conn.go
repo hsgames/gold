@@ -1,13 +1,10 @@
 package tcp
 
 import (
-	"bufio"
 	"fmt"
-	"github.com/hsgames/gold/container/queue"
-	"github.com/hsgames/gold/log"
-	goldnet "github.com/hsgames/gold/net"
+	gnet "github.com/hsgames/gold/net"
 	"github.com/hsgames/gold/safe"
-	"github.com/pkg/errors"
+	"log/slog"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -15,53 +12,37 @@ import (
 )
 
 type Conn struct {
-	opts           connOptions
-	name           string
-	conn           net.Conn
-	ep             goldnet.EndPoint
-	wg             sync.WaitGroup
-	parser         Parser
-	handler        goldnet.Handler
-	writeQueue     *queue.MPSCQueue
-	brPool         *sync.Pool
-	bwPool         *sync.Pool
-	br             *bufio.Reader
-	bw             *bufio.Writer
-	closed         int32
-	shutdownOnce   sync.Once
-	closeOnce      sync.Once
-	shutdownChan   chan struct{}
-	closeWriteChan chan struct{}
-	closeChan      chan bool
-	doneChan       chan struct{}
-	userData       any
-	logger         log.Logger
+	opts         connOptions
+	name         string
+	conn         net.Conn
+	wg           sync.WaitGroup
+	handler      gnet.Handler
+	reader       Reader
+	writer       Writer
+	writeChan    chan []byte
+	closed       int32
+	shutdownOnce sync.Once
+	closeOnce    sync.Once
+	shutdownChan chan struct{}
+	closeChan    chan bool
+	wakeupChan   chan struct{}
+	doneChan     chan struct{}
+	userData     any
 }
 
-func newConn(name string, conn net.Conn, ep goldnet.EndPoint,
-	newParser NewParserFunc, newHandler goldnet.NewHandlerFunc, opts connOptions,
-	brPool *sync.Pool, bwPool *sync.Pool, logger log.Logger) *Conn {
-	br := brPool.Get().(*bufio.Reader)
-	bw := bwPool.Get().(*bufio.Writer)
-	br.Reset(conn)
-	bw.Reset(conn)
+func newConn(name string, conn net.Conn, handler gnet.Handler, opts connOptions) *Conn {
 	return &Conn{
-		opts:           opts,
-		name:           name,
-		conn:           conn,
-		ep:             ep,
-		parser:         newParser(logger),
-		handler:        newHandler(logger),
-		writeQueue:     queue.NewMPSCQueue(opts.maxWriteQueueSize, opts.writeQueueShrinkSize),
-		brPool:         brPool,
-		bwPool:         bwPool,
-		br:             br,
-		bw:             bw,
-		shutdownChan:   make(chan struct{}, 1),
-		closeWriteChan: make(chan struct{}, 1),
-		closeChan:      make(chan bool, 1),
-		doneChan:       make(chan struct{}),
-		logger:         logger,
+		opts:         opts,
+		name:         name,
+		conn:         conn,
+		handler:      handler,
+		reader:       opts.newReader(),
+		writer:       opts.newWriter(),
+		writeChan:    make(chan []byte, opts.writeChanSize),
+		shutdownChan: make(chan struct{}, 1),
+		closeChan:    make(chan bool, 1),
+		wakeupChan:   make(chan struct{}),
+		doneChan:     make(chan struct{}),
 	}
 }
 
@@ -82,10 +63,6 @@ func (c *Conn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
-func (c *Conn) EndPoint() goldnet.EndPoint {
-	return c.ep
-}
-
 func (c *Conn) UserData() any {
 	return c.userData
 }
@@ -98,6 +75,10 @@ func (c *Conn) IsClosed() bool {
 	return atomic.LoadInt32(&c.closed) == 1
 }
 
+func (c *Conn) Done() chan struct{} {
+	return c.doneChan
+}
+
 func (c *Conn) Shutdown() {
 	c.shutdownOnce.Do(func() {
 		atomic.StoreInt32(&c.closed, 1)
@@ -106,12 +87,20 @@ func (c *Conn) Shutdown() {
 }
 
 func (c *Conn) doShutdown() {
-	c.writeQueue.Push(nil)
-	err := c.conn.SetWriteDeadline(time.Now().Add(c.opts.shutdownWritePeriod))
-	if err != nil {
+	select {
+	case c.writeChan <- nil:
+		deadLine := time.Now().Add(5 * time.Second)
+		if err := c.conn.SetWriteDeadline(deadLine); err != nil {
+			slog.Error("tcp: conn shutdown set write deadline",
+				slog.String("conn", c.String()), slog.Any("error", err))
+
+			c.Close()
+		}
+	default:
+		slog.Info("tcp: conn shutdown write channel is full",
+			slog.String("conn", c.String()))
+
 		c.Close()
-		c.logger.Error("tcp: conn %s shutdown set write deadline err: %+v",
-			c, errors.WithStack(err))
 	}
 }
 
@@ -119,91 +108,59 @@ func (c *Conn) Close() {
 	c.close(true)
 }
 
-func (c *Conn) close(noLinger bool) {
+func (c *Conn) close(force bool) {
 	c.closeOnce.Do(func() {
 		atomic.StoreInt32(&c.closed, 1)
-		c.closeChan <- noLinger
+		c.closeChan <- force
 	})
 }
 
-func (c *Conn) doClose(noLinger bool) {
-	var err error
-	close(c.doneChan)
-	c.writeQueue.Push(nil)
-	if noLinger {
-		err = c.conn.(*net.TCPConn).SetLinger(0)
-		if err != nil {
-			c.logger.Error("tcp: conn %s close set linger err: %+v",
-				c, errors.WithStack(err))
+func (c *Conn) doClose(force bool) {
+	defer close(c.wakeupChan)
+
+	if force {
+		if err := c.conn.(*net.TCPConn).SetLinger(0); err != nil {
+			slog.Error("tcp: conn close set linger",
+				slog.String("conn", c.String()), slog.Any("error", err))
 		}
 	}
-	err = c.conn.Close()
-	if err != nil {
-		c.logger.Error("tcp: conn %s close err: %+v",
-			c, errors.WithStack(err))
-	}
-}
 
-func (c *Conn) closeWrite() {
-	c.closeWriteChan <- struct{}{}
-}
-
-func (c *Conn) doCloseWrite() {
-	err := c.conn.(*net.TCPConn).CloseWrite()
-	if err != nil {
-		c.Close()
-		c.logger.Error("tcp: conn %s close write err: %+v",
-			c, errors.WithStack(err))
-		return
+	if err := c.conn.Close(); err != nil {
+		slog.Error("tcp: conn close",
+			slog.String("conn", c.String()), slog.Any("error", err))
 	}
-	readDeadline := time.Now().Add(c.opts.shutdownReadPeriod)
-	err = c.conn.SetReadDeadline(readDeadline)
-	if err != nil {
-		c.Close()
-		c.logger.Error("tcp: conn %s close write set read deadline err: %+v",
-			c, errors.WithStack(err))
-	}
-}
-
-func (c *Conn) isDone() bool {
-	select {
-	case <-c.doneChan:
-		return true
-	default:
-	}
-	return false
 }
 
 func (c *Conn) Write(data []byte) {
 	if c.IsClosed() || len(data) == 0 {
 		return
 	}
-	c.writeQueue.Push(data)
-}
 
-func (c *Conn) clear() {
-	c.br.Reset(nil)
-	c.bw.Reset(nil)
-	c.brPool.Put(c.br)
-	c.bwPool.Put(c.bw)
-	c.br = nil
-	c.bw = nil
+	select {
+	case c.writeChan <- data:
+	default:
+		slog.Info("tcp: conn write channel is full",
+			slog.String("conn", c.String()))
+
+		c.Close()
+	}
 }
 
 func (c *Conn) serve() {
-	defer c.clear()
+	defer close(c.doneChan)
+
 	c.wg.Add(2)
 	defer c.wg.Wait()
-	safe.Go(c.logger, c.read)
-	safe.Go(c.logger, c.write)
+
+	safe.Go(c.read)
+	safe.Go(c.write)
+
 	for {
 		select {
 		case <-c.shutdownChan:
 			c.doShutdown()
-		case <-c.closeWriteChan:
-			c.doCloseWrite()
-		case noLinger := <-c.closeChan:
-			c.doClose(noLinger)
+		case force := <-c.closeChan:
+			c.doClose(force)
 			return
 		}
 	}
@@ -211,27 +168,33 @@ func (c *Conn) serve() {
 
 func (c *Conn) read() {
 	defer c.wg.Done()
+	defer c.close(false)
+
 	defer func() {
 		if err := c.handler.OnClose(c); err != nil {
-			c.logger.Error("tcp: conn %s on close err: %+v", c, err)
+			slog.Error("tcp: conn on close",
+				slog.String("conn", c.String()), slog.Any("error", err))
 		}
 	}()
-	defer c.close(false)
+
 	if err := c.handler.OnOpen(c); err != nil {
-		c.logger.Error("tcp: conn %s on open err: %+v", c, err)
+		slog.Error("tcp: conn on open",
+			slog.String("conn", c.String()), slog.Any("error", err))
 		return
 	}
+
 	for {
 		data, err := c.readMessage()
 		if err != nil {
-			if !c.isDone() {
-				c.logger.Info("tcp: conn %s read message err: %v", c, err)
-			}
+			slog.Info("tcp: conn read message",
+				slog.String("conn", c.String()), slog.Any("error", err))
 			return
 		}
+
 		err = c.handler.OnMessage(c, data)
 		if err != nil {
-			c.logger.Error("tcp: conn %s handler on message err: %+v", c, err)
+			slog.Error("tcp: conn on message",
+				slog.String("conn", c.String()), slog.Any("error", err))
 			return
 		}
 	}
@@ -239,55 +202,44 @@ func (c *Conn) read() {
 
 func (c *Conn) write() {
 	defer c.wg.Done()
-	defer c.closeWrite()
-	var (
-		err  error
-		exit bool
-	)
+	defer c.close(false)
+
 	for {
-		datas := c.writeQueue.Pop()
-		for _, data := range *datas {
+		select {
+		case <-c.wakeupChan:
+			return
+		case data := <-c.writeChan:
 			if data == nil {
-				exit = true
-				break
-			}
-			_, err = c.writeMessage(data.([]byte))
-			if err != nil {
-				if !c.isDone() {
-					c.logger.Error("tcp: conn %s buffer write err: %+v", c, err)
-				}
 				return
 			}
-		}
-		err = c.bw.Flush()
-		if err != nil {
-			if !c.isDone() {
-				c.logger.Error("tcp: conn %s buffer flush err: %+v", c, errors.WithStack(err))
+
+			if _, err := c.writeMessage(data); err != nil {
+				slog.Info("tcp: conn write message",
+					slog.String("conn", c.String()), slog.Any("error", err))
+				return
 			}
-			return
-		}
-		if exit {
-			return
 		}
 	}
 }
 
 func (c *Conn) readMessage() ([]byte, error) {
-	return c.parser.ReadMessage(c.br, c.opts.maxReadMsgSize)
+	return c.reader.Read(c.conn, c.opts.maxReadMsgSize)
 }
 
 func (c *Conn) writeMessage(data []byte) (int, error) {
-	return c.parser.WriteMessage(c.bw, data, c.opts.maxWriteMsgSize)
+	return c.writer.Write(c.conn, data, c.opts.maxWriteMsgSize)
 }
 
 func SetConnOptions(conn net.Conn, keepAlivePeriod time.Duration) error {
 	if keepAlivePeriod > 0 {
 		if err := conn.(*net.TCPConn).SetKeepAlive(true); err != nil {
-			return errors.Wrapf(err, "tcp: set conn keep alive, conn %+v", conn)
+			return fmt.Errorf("tcp: set conn [%s] keep alive err [%w]", conn, err)
 		}
+
 		if err := conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlivePeriod); err != nil {
-			return errors.Wrapf(err, "tcp: set conn keep alive period, conn %+v", conn)
+			return fmt.Errorf("tcp: set conn [%s] keep alive period err [%w]", conn, err)
 		}
 	}
+
 	return nil
 }

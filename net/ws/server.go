@@ -1,52 +1,76 @@
 package ws
 
 import (
+	"context"
 	"fmt"
 	"github.com/gorilla/websocket"
-	"github.com/hsgames/gold/log"
-	goldnet "github.com/hsgames/gold/net"
-	"github.com/hsgames/gold/net/http"
+	gnet "github.com/hsgames/gold/net"
 	"github.com/hsgames/gold/net/tcp"
 	"github.com/hsgames/gold/safe"
-	"github.com/pkg/errors"
+	"log/slog"
+	"net/http"
 	"sync"
 	"sync/atomic"
 )
 
 type Server struct {
 	*http.Server
-	opts       serverOptions
-	newHandler goldnet.NewHandlerFunc
+
+	opts       options
+	name       string
+	newHandler func() gnet.Handler
 	upgrader   *websocket.Upgrader
-	connsWg    sync.WaitGroup
 	connsMu    sync.Mutex
 	conns      map[*Conn]struct{}
 	connId     uint64
-	logger     log.Logger
 }
 
-func NewServer(name, network, addr string, newHandler goldnet.NewHandlerFunc,
-	logger log.Logger, opt ...ServerOption) *Server {
-	opts := defaultServerOptions()
+func NewServer(name, addr string,
+	newHandler func() gnet.Handler, opt ...Option) (s *Server, err error) {
+
+	opts := defaultOptions()
 	for _, o := range opt {
 		o(&opts)
 	}
-	opts.ensure()
-	s := &Server{
+
+	if err = opts.check(); err != nil {
+		return
+	}
+
+	s = &Server{
 		opts:       opts,
+		name:       name,
 		newHandler: newHandler,
 		upgrader: &websocket.Upgrader{
 			HandshakeTimeout: opts.handshakeTimeout,
 			CheckOrigin:      func(_ *http.Request) bool { return opts.checkOrigin },
 		},
-		conns:  make(map[*Conn]struct{}),
-		logger: logger,
+		conns: make(map[*Conn]struct{}),
 	}
-	s.Server = http.NewServer(name, network, addr,
-		http.Handlers{opts.pattern: s.serve}, s.logger,
-		http.ServerReadTimeout(opts.readTimeout),
-		http.ServerWriteTimeout(opts.writeTimeout))
-	return s
+
+	mux := http.NewServeMux()
+	mux.HandleFunc(s.opts.pattern, s.serve)
+
+	s.Server = &http.Server{
+		Addr:         addr,
+		Handler:      mux,
+		ReadTimeout:  s.opts.readTimeout,
+		WriteTimeout: s.opts.writeTimeout,
+	}
+
+	return
+}
+
+func (s *Server) String() string {
+	return fmt.Sprintf("[name:%s][listen_addr:%s]", s.Name(), s.Addr())
+}
+
+func (s *Server) Name() string {
+	return s.name
+}
+
+func (s *Server) Addr() string {
+	return s.Server.Addr
 }
 
 func (s *Server) ConnNum() int {
@@ -55,59 +79,89 @@ func (s *Server) ConnNum() int {
 	return len(s.conns)
 }
 
-func (s *Server) Shutdown() {
-	s.Server.Shutdown()
+func (s *Server) Shutdown(ctx context.Context) {
+	if err := s.Server.Shutdown(ctx); err != nil {
+		slog.Error("ws: server shutdown",
+			slog.String("server", s.String()), slog.Any("error", err))
+	}
+
 	s.connsMu.Lock()
+	defer s.connsMu.Unlock()
+	defer clear(s.conns)
+
 	for c := range s.conns {
 		c.Shutdown()
 	}
-	s.conns = make(map[*Conn]struct{})
-	s.connsMu.Unlock()
-	s.connsWg.Wait()
+
+	for c := range s.conns {
+		select {
+		case <-c.Done():
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
-	defer safe.Recover(s.logger)
+	defer safe.Recover()
+
 	if r.Method != "GET" {
-		s.logger.Error("ws: server %s method %s not allowed", s, r.Method)
+		slog.Error("ws: server method not allowed",
+			slog.String("server", s.String()), slog.String("method", r.Method))
+
 		http.Error(w, "Method not allowed", 405)
+
 		return
 	}
+
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		s.logger.Error("ws: server %s upgrade failed err: %+v", s, errors.WithStack(err))
+		slog.Error("ws: server %s upgrade",
+			slog.String("server", s.String()), slog.Any("error", err))
+
 		return
 	}
+
 	s.connsMu.Lock()
 	if s.opts.maxConnNum > 0 && len(s.conns) >= s.opts.maxConnNum {
 		s.connsMu.Unlock()
-		s.logger.Warn("ws: server %s accept too many conns", s)
-		err = conn.Close()
-		if err != nil {
-			s.logger.Error("ws: server %s close overflow conn err: %+v",
-				s, errors.Wrapf(err, "ws: conn %+v", conn))
-		}
-		return
-	}
-	if err = tcp.SetConnOptions(conn.UnderlyingConn(), s.opts.keepAlivePeriod); err != nil {
-		s.connsMu.Unlock()
-		s.logger.Error("ws: server %s set conn options err: %+v", s, err)
+
+		slog.Info("ws: server accept too many conns",
+			slog.String("server", s.String()))
+
 		if err := conn.Close(); err != nil {
-			s.logger.Error("ws: server %s close set options conn err: %+v",
-				s, errors.Wrapf(err, "ws: conn %+v", conn))
+			slog.Error("ws: server close overflow conn",
+				slog.String("server", s.String()), slog.Any("error", err))
 		}
+
 		return
 	}
+
+	if err = tcp.SetConnOptions(conn.NetConn(), s.opts.keepAlivePeriod); err != nil {
+		s.connsMu.Unlock()
+
+		slog.Error("ws: server set conn options",
+			slog.String("server", s.String()), slog.Any("error", err))
+
+		if err := conn.Close(); err != nil {
+			slog.Error("ws: server close close set options conn",
+				slog.String("server", s.String()), slog.Any("error", err))
+		}
+
+		return
+	}
+
 	conn.SetReadLimit(int64(s.opts.maxReadMsgSize))
+
 	connId := atomic.AddUint64(&s.connId, 1)
 	name := fmt.Sprintf("%s_%d", s.Name(), connId)
-	c := newConn(name, conn, s, s.newHandler, s.opts.connOptions, s.logger)
+	c := newConn(name, conn, s.newHandler(), s.opts.connOptions)
 	s.conns[c] = struct{}{}
 	s.connsMu.Unlock()
-	s.connsWg.Add(1)
-	defer s.connsWg.Done()
+
 	c.serve()
+
 	s.connsMu.Lock()
+	defer s.connsMu.Unlock()
 	delete(s.conns, c)
-	s.connsMu.Unlock()
 }
