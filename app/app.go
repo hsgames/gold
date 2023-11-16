@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/hsgames/gold/safe"
 	"log/slog"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 )
 
@@ -45,7 +45,11 @@ func New(opt ...Option) *App {
 }
 
 func (a *App) Run(ctx context.Context) (err error) {
-	defer safe.Recover()
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("gold: app run panic [%v] stack [%s]", r, string(debug.Stack()))
+		}
+	}()
 
 	for _, f := range a.preStart {
 		if err = f(); err != nil {
@@ -55,7 +59,7 @@ func (a *App) Run(ctx context.Context) (err error) {
 
 	for _, s := range a.services {
 		if err = s.Init(); err != nil {
-			err = fmt.Errorf("gold: service [%s] init err [%w]", s.Name(), err)
+			err = fmt.Errorf("gold: app service [%s] init err [%w]", s.Name(), err)
 			return
 		}
 	}
@@ -67,16 +71,16 @@ func (a *App) Run(ctx context.Context) (err error) {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					errs <- fmt.Errorf("gold: service [%s] panic [%v]", s.Name(), r)
+					errs <- fmt.Errorf("gold: app service [%s] panic [%v]", s.Name(), r)
 				}
 			}()
 
 			if err := s.Start(); err != nil {
-				errs <- fmt.Errorf("gold: service [%s] start err [%w]", s.Name(), err)
+				errs <- fmt.Errorf("gold: app service [%s] start err [%w]", s.Name(), err)
 			}
 		}()
 
-		slog.Info("gold: service is running", slog.String("name", s.Name()))
+		slog.Info("gold: app service is running", slog.String("name", s.Name()))
 	}
 
 	for _, f := range a.postStart {
@@ -91,7 +95,7 @@ func (a *App) Run(ctx context.Context) (err error) {
 	select {
 	case err = <-errs:
 	case sig := <-ch:
-		slog.Info("gold: quit", slog.String("signal", sig.String()))
+		slog.Info("gold: app quit", slog.String("signal", sig.String()))
 	case <-ctx.Done():
 	}
 
@@ -103,9 +107,9 @@ func (a *App) Run(ctx context.Context) (err error) {
 
 	for _, s := range a.services {
 		if e := s.Stop(); e != nil {
-			err = errors.Join(err, fmt.Errorf("gold: service [%s] stop err [%w]", s.Name(), e))
+			err = errors.Join(err, fmt.Errorf("gold: app service [%s] stop err [%w]", s.Name(), e))
 		} else {
-			slog.Info("gold: service is stopped", slog.String("name", s.Name()))
+			slog.Info("gold: app service is stopped", slog.String("name", s.Name()))
 		}
 	}
 

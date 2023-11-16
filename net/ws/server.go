@@ -3,14 +3,15 @@ package ws
 import (
 	"context"
 	"fmt"
-	"github.com/gorilla/websocket"
-	gnet "github.com/hsgames/gold/net"
-	"github.com/hsgames/gold/net/tcp"
-	"github.com/hsgames/gold/safe"
 	"log/slog"
 	"net/http"
 	"sync"
 	"sync/atomic"
+
+	"github.com/gorilla/websocket"
+	gnet "github.com/hsgames/gold/net"
+	"github.com/hsgames/gold/net/tcp"
+	"github.com/hsgames/gold/safe"
 )
 
 type Server struct {

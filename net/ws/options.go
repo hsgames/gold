@@ -1,16 +1,11 @@
 package ws
 
 import (
-	"errors"
 	"fmt"
-	"github.com/gorilla/websocket"
 	"math"
 	"time"
-)
 
-const (
-	BinaryMessage = websocket.BinaryMessage
-	TextMessage   = websocket.TextMessage
+	"github.com/gorilla/websocket"
 )
 
 type connOptions struct {
@@ -37,7 +32,7 @@ func defaultOptions() options {
 		connOptions: connOptions{writeChanSize: 200,
 			maxReadMsgSize:  math.MaxUint16,
 			maxWriteMsgSize: math.MaxUint16,
-			msgType:         BinaryMessage,
+			msgType:         websocket.BinaryMessage,
 			keepAlivePeriod: 3 * time.Minute,
 		},
 		pattern:     "/",
@@ -52,12 +47,6 @@ func (o *options) check() error {
 
 	if o.maxWriteMsgSize <= 0 {
 		return fmt.Errorf("ws: options maxWriteMsgSize:[%d] <= 0", o.maxWriteMsgSize)
-	}
-
-	switch o.msgType {
-	case BinaryMessage, TextMessage:
-	default:
-		return errors.New("ws: options msgType not in (BinaryMessage, TextMessage)")
 	}
 
 	return nil
@@ -83,9 +72,15 @@ func WithMaxWriteMsgSize(maxWriteMsgSize int) Option {
 	}
 }
 
-func WithMsgType(msgType int) Option {
+func WithBinaryMessage() Option {
 	return func(o *options) {
-		o.msgType = msgType
+		o.msgType = websocket.BinaryMessage
+	}
+}
+
+func WithTextMessage() Option {
+	return func(o *options) {
+		o.msgType = websocket.TextMessage
 	}
 }
 

@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	gnet "github.com/hsgames/gold/net"
-	"github.com/hsgames/gold/safe"
 	"log/slog"
 	"net"
 	"sync"
 	"time"
+
+	gnet "github.com/hsgames/gold/net"
+	"github.com/hsgames/gold/safe"
 )
 
 type Server struct {

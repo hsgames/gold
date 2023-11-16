@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/gorilla/websocket"
 	gnet "github.com/hsgames/gold/net"
 	"github.com/hsgames/gold/net/tcp"

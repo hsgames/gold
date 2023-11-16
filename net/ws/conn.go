@@ -2,14 +2,15 @@ package ws
 
 import (
 	"fmt"
-	"github.com/gorilla/websocket"
-	gnet "github.com/hsgames/gold/net"
-	"github.com/hsgames/gold/safe"
 	"log/slog"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/gorilla/websocket"
+	gnet "github.com/hsgames/gold/net"
+	"github.com/hsgames/gold/safe"
 )
 
 type Conn struct {

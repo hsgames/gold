@@ -2,13 +2,14 @@ package tcp
 
 import (
 	"fmt"
-	gnet "github.com/hsgames/gold/net"
-	"github.com/hsgames/gold/safe"
 	"log/slog"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	gnet "github.com/hsgames/gold/net"
+	"github.com/hsgames/gold/safe"
 )
 
 type Conn struct {

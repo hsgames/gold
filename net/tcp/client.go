@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+
 	gnet "github.com/hsgames/gold/net"
 	"github.com/hsgames/gold/safe"
-	"net"
 )
 
 type Client struct {

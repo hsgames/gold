@@ -3,10 +3,11 @@ package tcp
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/hsgames/gold/pool/bytespool"
 	"io"
 	"math"
 	"net"
+
+	"github.com/hsgames/gold/pool/bytespool"
 )
 
 type Reader interface {
