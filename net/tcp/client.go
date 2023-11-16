@@ -58,7 +58,7 @@ func (c *Client) Addr() string {
 func (c *Client) Dial(ctx context.Context) (gnet.Conn, error) {
 	conn, err := c.dialer.DialContext(ctx, c.network, c.addr)
 	if err != nil {
-		return nil, fmt.Errorf("tcp: client [%s] dial err [%w]", c, err)
+		return nil, fmt.Errorf("tcp: client [%s] dial error [%w]", c, err)
 	}
 
 	if err = SetConnOptions(conn, c.opts.keepAlivePeriod); err != nil {
@@ -66,7 +66,7 @@ func (c *Client) Dial(ctx context.Context) (gnet.Conn, error) {
 			err = errors.Join(err, e)
 		}
 
-		return nil, fmt.Errorf("tcp: client [%s] set conn options err [%w]", c, err)
+		return nil, fmt.Errorf("tcp: client [%s] set conn options error [%w]", c, err)
 	}
 
 	tc := newConn(c.name, conn, c.newHandler(), c.opts.connOptions)

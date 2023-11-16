@@ -234,11 +234,11 @@ func (c *Conn) writeMessage(data []byte) (int, error) {
 func SetConnOptions(conn net.Conn, keepAlivePeriod time.Duration) error {
 	if keepAlivePeriod > 0 {
 		if err := conn.(*net.TCPConn).SetKeepAlive(true); err != nil {
-			return fmt.Errorf("tcp: set conn [%s] keep alive err [%w]", conn, err)
+			return fmt.Errorf("tcp: set conn [%s] keep alive error [%w]", conn, err)
 		}
 
 		if err := conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlivePeriod); err != nil {
-			return fmt.Errorf("tcp: set conn [%s] keep alive period err [%w]", conn, err)
+			return fmt.Errorf("tcp: set conn [%s] keep alive period error [%w]", conn, err)
 		}
 	}
 

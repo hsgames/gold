@@ -107,7 +107,7 @@ func (s *Server) Listen() error {
 
 	lis, err := net.Listen(s.network, s.addr)
 	if err != nil {
-		return fmt.Errorf("tcp: server [%s] listen err [%w]", s.addr, err)
+		return fmt.Errorf("tcp: server [%s] listen error [%w]", s.addr, err)
 	}
 
 	s.lis = lis
@@ -184,7 +184,7 @@ func (s *Server) Serve() error {
 				continue
 			}
 
-			return fmt.Errorf("tcp: server [%s] accept err [%w]", s, err)
+			return fmt.Errorf("tcp: server [%s] accept error [%w]", s, err)
 		}
 		tempDelay = 0
 

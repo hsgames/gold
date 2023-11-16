@@ -26,6 +26,18 @@ func WithHandlerOptions(ho *slog.HandlerOptions) Option {
 	}
 }
 
+func WithSource(add bool) Option {
+	return func(opts *options) {
+		opts.opts.AddSource = add
+	}
+}
+
+func WithLevel(level slog.Level) Option {
+	return func(opts *options) {
+		opts.opts.Level = level
+	}
+}
+
 func WithAttrs(args ...any) Option {
 	return func(opts *options) {
 		clear(opts.args)

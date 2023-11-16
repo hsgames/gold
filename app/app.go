@@ -47,7 +47,7 @@ func New(opt ...Option) *App {
 func (a *App) Run(ctx context.Context) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("gold: app run panic [%v] stack [%s]", r, string(debug.Stack()))
+			err = fmt.Errorf("app: run panic [%v] stack [%s]", r, string(debug.Stack()))
 		}
 	}()
 
@@ -59,7 +59,7 @@ func (a *App) Run(ctx context.Context) (err error) {
 
 	for _, s := range a.services {
 		if err = s.Init(); err != nil {
-			err = fmt.Errorf("gold: app service [%s] init err [%w]", s.Name(), err)
+			err = fmt.Errorf("app: service [%s] init error [%w]", s.Name(), err)
 			return
 		}
 	}
@@ -71,16 +71,16 @@ func (a *App) Run(ctx context.Context) (err error) {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					errs <- fmt.Errorf("gold: app service [%s] panic [%v]", s.Name(), r)
+					errs <- fmt.Errorf("app: service [%s] panic [%v]", s.Name(), r)
 				}
 			}()
 
 			if err := s.Start(); err != nil {
-				errs <- fmt.Errorf("gold: app service [%s] start err [%w]", s.Name(), err)
+				errs <- fmt.Errorf("app: service [%s] start error [%w]", s.Name(), err)
 			}
 		}()
 
-		slog.Info("gold: app service is running", slog.String("name", s.Name()))
+		slog.Info("app: service is running", slog.String("service", s.Name()))
 	}
 
 	for _, f := range a.postStart {
@@ -95,7 +95,7 @@ func (a *App) Run(ctx context.Context) (err error) {
 	select {
 	case err = <-errs:
 	case sig := <-ch:
-		slog.Info("gold: app quit", slog.String("signal", sig.String()))
+		slog.Info("app: quit", slog.String("signal", sig.String()))
 	case <-ctx.Done():
 	}
 
@@ -107,9 +107,9 @@ func (a *App) Run(ctx context.Context) (err error) {
 
 	for _, s := range a.services {
 		if e := s.Stop(); e != nil {
-			err = errors.Join(err, fmt.Errorf("gold: app service [%s] stop err [%w]", s.Name(), e))
+			err = errors.Join(err, fmt.Errorf("app: service [%s] stop error [%w]", s.Name(), e))
 		} else {
-			slog.Info("gold: app service is stopped", slog.String("name", s.Name()))
+			slog.Info("app: service is stopped", slog.String("service", s.Name()))
 		}
 	}
 
