@@ -20,5 +20,6 @@ type Conn interface {
 type Handler interface {
 	OnOpen(conn Conn) error
 	OnClose(conn Conn) error
-	OnMessage(conn Conn, data []byte) error
+	OnRead(conn Conn, data []byte) error
+	OnWrite(conn Conn, data []byte) error
 }

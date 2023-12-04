@@ -44,7 +44,7 @@ func NewServer(name, addr string,
 		newHandler: newHandler,
 		upgrader: &websocket.Upgrader{
 			HandshakeTimeout: opts.handshakeTimeout,
-			CheckOrigin:      func(_ *http.Request) bool { return opts.checkOrigin },
+			CheckOrigin:      opts.checkOrigin,
 		},
 		conns: make(map[*Conn]struct{}),
 	}
@@ -152,7 +152,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn.SetReadLimit(int64(s.opts.maxReadMsgSize))
+	conn.SetReadLimit(int64(s.opts.maxReadDataSize))
 
 	connId := atomic.AddUint64(&s.connId, 1)
 	name := fmt.Sprintf("%s_%d", s.Name(), connId)

@@ -1,19 +1,22 @@
 package ws
 
 import (
+	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
 type connOptions struct {
-	writeChanSize   int
-	maxReadMsgSize  int
-	maxWriteMsgSize int
-	msgType         int
-	keepAlivePeriod time.Duration
+	writeChanSize    int
+	maxReadDataSize  int
+	maxWriteDataSize int
+	dataType         int
+	keepAlivePeriod  time.Duration
+	putWriteData     func(b []byte)
 }
 
 type options struct {
@@ -21,7 +24,7 @@ type options struct {
 
 	maxConnNum       int
 	pattern          string
-	checkOrigin      bool
+	checkOrigin      func(_ *http.Request) bool
 	handshakeTimeout time.Duration
 	readTimeout      time.Duration
 	writeTimeout     time.Duration
@@ -30,23 +33,28 @@ type options struct {
 func defaultOptions() options {
 	return options{
 		connOptions: connOptions{writeChanSize: 200,
-			maxReadMsgSize:  math.MaxUint16,
-			maxWriteMsgSize: math.MaxUint16,
-			msgType:         websocket.BinaryMessage,
-			keepAlivePeriod: 3 * time.Minute,
+			maxReadDataSize:  math.MaxUint16,
+			maxWriteDataSize: math.MaxUint16,
+			dataType:         websocket.BinaryMessage,
+			keepAlivePeriod:  3 * time.Minute,
+			putWriteData:     func(b []byte) {},
 		},
 		pattern:     "/",
-		checkOrigin: true,
+		checkOrigin: func(_ *http.Request) bool { return true },
 	}
 }
 
 func (o *options) check() error {
-	if o.maxReadMsgSize <= 0 {
-		return fmt.Errorf("ws: options maxReadMsgSize:[%d] <= 0", o.maxReadMsgSize)
+	if o.maxReadDataSize <= 0 {
+		return fmt.Errorf("ws: options maxReadDataSize:[%d] <= 0", o.maxReadDataSize)
 	}
 
-	if o.maxWriteMsgSize <= 0 {
-		return fmt.Errorf("ws: options maxWriteMsgSize:[%d] <= 0", o.maxWriteMsgSize)
+	if o.maxWriteDataSize <= 0 {
+		return fmt.Errorf("ws: options maxWriteDataSize:[%d] <= 0", o.maxWriteDataSize)
+	}
+
+	if o.putWriteData == nil {
+		return errors.New("ws: options putWriteData is nil")
 	}
 
 	return nil
@@ -60,33 +68,39 @@ func WithWriteChanSize(writeChanSize int) Option {
 	}
 }
 
-func WithMaxReadMsgSize(maxReadMsgSize int) Option {
+func WithMaxReadDataSize(maxReadDataSize int) Option {
 	return func(o *options) {
-		o.maxReadMsgSize = maxReadMsgSize
+		o.maxReadDataSize = maxReadDataSize
 	}
 }
 
-func WithMaxWriteMsgSize(maxWriteMsgSize int) Option {
+func WithMaxWriteDataSize(maxWriteDataSize int) Option {
 	return func(o *options) {
-		o.maxWriteMsgSize = maxWriteMsgSize
+		o.maxWriteDataSize = maxWriteDataSize
 	}
 }
 
-func WithBinaryMessage() Option {
+func WithBinary() Option {
 	return func(o *options) {
-		o.msgType = websocket.BinaryMessage
+		o.dataType = websocket.BinaryMessage
 	}
 }
 
-func WithTextMessage() Option {
+func WithText() Option {
 	return func(o *options) {
-		o.msgType = websocket.TextMessage
+		o.dataType = websocket.TextMessage
 	}
 }
 
 func WithKeepAlivePeriod(keepAlivePeriod time.Duration) Option {
 	return func(o *options) {
 		o.keepAlivePeriod = keepAlivePeriod
+	}
+}
+
+func PutWriteData(putWriteData func(b []byte)) Option {
+	return func(o *options) {
+		o.putWriteData = putWriteData
 	}
 }
 
@@ -102,7 +116,7 @@ func WithMaxConnNum(maxConnNum int) Option {
 	}
 }
 
-func WithCheckOrigin(checkOrigin bool) Option {
+func WithCheckOrigin(checkOrigin func(_ *http.Request) bool) Option {
 	return func(o *options) {
 		o.checkOrigin = checkOrigin
 	}

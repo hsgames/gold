@@ -1,18 +1,21 @@
 package tcp
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"time"
 )
 
 type connOptions struct {
-	writeChanSize   int
-	maxReadMsgSize  int
-	maxWriteMsgSize int
-	keepAlivePeriod time.Duration
-	newReader       func() Reader
-	newWriter       func() Writer
+	writeChanSize    int
+	maxReadDataSize  int
+	maxWriteDataSize int
+	keepAlivePeriod  time.Duration
+	newReader        func() Reader
+	newWriter        func() Writer
+	getReadData      func(size int) []byte
+	putWriteData     func(b []byte)
 }
 
 type options struct {
@@ -24,23 +27,41 @@ type options struct {
 func defaultOptions() options {
 	return options{
 		connOptions: connOptions{
-			writeChanSize:   200,
-			maxReadMsgSize:  math.MaxUint16,
-			maxWriteMsgSize: math.MaxUint16,
-			keepAlivePeriod: 3 * time.Minute,
-			newReader:       defaultReader,
-			newWriter:       defaultWriter,
+			writeChanSize:    200,
+			maxReadDataSize:  math.MaxUint16,
+			maxWriteDataSize: math.MaxUint16,
+			keepAlivePeriod:  3 * time.Minute,
+			newReader:        defaultReader,
+			newWriter:        defaultWriter,
+			getReadData:      func(size int) []byte { return make([]byte, size) },
+			putWriteData:     func(b []byte) {},
 		},
 	}
 }
 
 func (o *options) check() error {
-	if o.maxReadMsgSize <= 0 {
-		return fmt.Errorf("tcp: options maxReadMsgSize [%d] <= 0", o.maxReadMsgSize)
+	if o.maxReadDataSize <= 0 {
+		return fmt.Errorf("tcp: options maxReadDataSize [%d] <= 0", o.maxReadDataSize)
 	}
 
-	if o.maxWriteMsgSize <= 0 {
-		return fmt.Errorf("tcp: options maxWriteMsgSize [%d] <= 0", o.maxWriteMsgSize)
+	if o.maxWriteDataSize <= 0 {
+		return fmt.Errorf("tcp: options maxWriteDataSize [%d] <= 0", o.maxWriteDataSize)
+	}
+
+	if o.newReader == nil {
+		return errors.New("tcp: options newReader is nil")
+	}
+
+	if o.newWriter == nil {
+		return errors.New("tcp: options newWriter is nil")
+	}
+
+	if o.getReadData == nil {
+		return errors.New("tcp: options getReadData is nil")
+	}
+
+	if o.putWriteData == nil {
+		return errors.New("tcp: options putWriteData is nil")
 	}
 
 	return nil
@@ -54,15 +75,15 @@ func WithWriteChanSize(writeChanSize int) Option {
 	}
 }
 
-func WithMaxReadMsgSize(maxReadMsgSize int) Option {
+func WithMaxReadDataSize(maxReadDataSize int) Option {
 	return func(o *options) {
-		o.maxReadMsgSize = maxReadMsgSize
+		o.maxReadDataSize = maxReadDataSize
 	}
 }
 
-func WithMaxWriteMsgSize(maxWriteMsgSize int) Option {
+func WithMaxWriteDataSize(maxWriteDataSize int) Option {
 	return func(o *options) {
-		o.maxWriteMsgSize = maxWriteMsgSize
+		o.maxWriteDataSize = maxWriteDataSize
 	}
 }
 
@@ -81,6 +102,18 @@ func WithReader(newReader func() Reader) Option {
 func WithWriter(newWriter func() Writer) Option {
 	return func(o *options) {
 		o.newWriter = newWriter
+	}
+}
+
+func GetReadData(getReadData func(size int) []byte) Option {
+	return func(o *options) {
+		o.getReadData = getReadData
+	}
+}
+
+func PutWriteData(putWriteData func(b []byte)) Option {
+	return func(o *options) {
+		o.putWriteData = putWriteData
 	}
 }
 

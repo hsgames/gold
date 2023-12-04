@@ -130,7 +130,8 @@ func (c *Conn) doClose(force bool) {
 }
 
 func (c *Conn) Write(data []byte) {
-	if c.IsClosed() || len(data) == 0 {
+	if c.IsClosed() {
+		c.opts.putWriteData(data)
 		return
 	}
 
@@ -139,13 +140,15 @@ func (c *Conn) Write(data []byte) {
 	default:
 		slog.Info("ws: conn write channel is full",
 			slog.String("conn", c.String()))
-
+		c.opts.putWriteData(data)
 		c.Close()
 	}
 }
 
 func (c *Conn) serve() {
 	defer close(c.doneChan)
+
+	defer c.clear()
 
 	c.wg.Add(2)
 	defer c.wg.Wait()
@@ -159,6 +162,19 @@ func (c *Conn) serve() {
 			c.doShutdown()
 		case force := <-c.closeChan:
 			c.doClose(force)
+			return
+		}
+	}
+}
+
+func (c *Conn) clear() {
+	for {
+		select {
+		case data := <-c.writeChan:
+			if data != nil {
+				c.opts.putWriteData(data)
+			}
+		default:
 			return
 		}
 	}
@@ -182,16 +198,16 @@ func (c *Conn) read() {
 	}
 
 	for {
-		data, err := c.readMessage()
+		data, err := c.readData()
 		if err != nil {
-			slog.Info("ws: conn read message",
+			slog.Info("ws: conn read data",
 				slog.String("conn", c.String()), slog.Any("error", err))
 			return
 		}
 
-		err = c.handler.OnMessage(c, data)
+		err = c.handler.OnRead(c, data)
 		if err != nil {
-			slog.Error("ws: conn on message",
+			slog.Error("ws: conn on read",
 				slog.String("conn", c.String()), slog.Any("error", err))
 			return
 		}
@@ -211,57 +227,67 @@ func (c *Conn) write() {
 				return
 			}
 
-			if _, err := c.writeMessage(data); err != nil {
-				slog.Info("ws: conn write message",
+			if _, err := c.writeData(data); err != nil {
+				slog.Info("ws: conn write data",
 					slog.String("conn", c.String()), slog.Any("error", err))
+				c.opts.putWriteData(data)
 				return
 			}
+
+			if err := c.handler.OnWrite(c, data); err != nil {
+				slog.Info("ws: conn on write",
+					slog.String("conn", c.String()), slog.Any("error", err))
+				c.opts.putWriteData(data)
+				return
+			}
+
+			c.opts.putWriteData(data)
 		}
 	}
 }
 
-func (c *Conn) readMessage() (data []byte, err error) {
-	var messageType int
+func (c *Conn) readData() (data []byte, err error) {
+	var dataType int
 
-	if messageType, data, err = c.conn.ReadMessage(); err != nil {
+	if dataType, data, err = c.conn.ReadMessage(); err != nil {
 		return
 	}
 
-	if messageType != c.opts.msgType {
-		err = fmt.Errorf("ws: conn [%s] read msg type [%d] != [%d]",
-			c, messageType, c.opts.msgType)
+	if dataType != c.opts.dataType {
+		err = fmt.Errorf("ws: conn [%s] read data type [%d] != [%d]",
+			c, dataType, c.opts.dataType)
 		return
 	}
 
-	msgSize := len(data)
-	if msgSize <= 0 {
-		err = fmt.Errorf("ws: conn [%s] read msg size [%d] <= 0", c, msgSize)
+	dataSize := len(data)
+	if dataSize <= 0 {
+		err = fmt.Errorf("ws: conn [%s] read data size [%d] <= 0", c, dataSize)
 		return
 	}
 
-	if msgSize > c.opts.maxReadMsgSize {
-		err = fmt.Errorf("ws: conn [%s] read msg size [%d] > [%d]",
-			c, msgSize, c.opts.maxReadMsgSize)
+	if dataSize > c.opts.maxReadDataSize {
+		err = fmt.Errorf("ws: conn [%s] read data size [%d] > [%d]",
+			c, dataSize, c.opts.maxReadDataSize)
 		return
 	}
 
 	return
 }
 
-func (c *Conn) writeMessage(data []byte) (n int, err error) {
-	msgSize := len(data)
-	if msgSize <= 0 {
-		err = fmt.Errorf("ws: conn [%s] write msg size [%d] <= 0", c, msgSize)
+func (c *Conn) writeData(data []byte) (n int, err error) {
+	dataSize := len(data)
+	if dataSize <= 0 {
+		err = fmt.Errorf("ws: conn [%s] write data size [%d] <= 0", c, dataSize)
 		return
 	}
 
-	if msgSize > c.opts.maxWriteMsgSize {
-		err = fmt.Errorf("ws: conn [%s] write msg size [%d] > [%d]",
-			c, msgSize, c.opts.maxWriteMsgSize)
+	if dataSize > c.opts.maxWriteDataSize {
+		err = fmt.Errorf("ws: conn [%s] write data size [%d] > [%d]",
+			c, dataSize, c.opts.maxWriteDataSize)
 		return
 	}
 
-	if err = c.conn.WriteMessage(c.opts.msgType, data); err != nil {
+	if err = c.conn.WriteMessage(c.opts.dataType, data); err != nil {
 		return
 	}
 

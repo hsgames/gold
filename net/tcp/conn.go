@@ -133,7 +133,8 @@ func (c *Conn) doClose(force bool) {
 }
 
 func (c *Conn) Write(data []byte) {
-	if c.IsClosed() || len(data) == 0 {
+	if c.IsClosed() {
+		c.opts.putWriteData(data)
 		return
 	}
 
@@ -142,13 +143,15 @@ func (c *Conn) Write(data []byte) {
 	default:
 		slog.Info("tcp: conn write channel is full",
 			slog.String("conn", c.String()))
-
+		c.opts.putWriteData(data)
 		c.Close()
 	}
 }
 
 func (c *Conn) serve() {
 	defer close(c.doneChan)
+
+	defer c.clear()
 
 	c.wg.Add(2)
 	defer c.wg.Wait()
@@ -162,6 +165,19 @@ func (c *Conn) serve() {
 			c.doShutdown()
 		case force := <-c.closeChan:
 			c.doClose(force)
+			return
+		}
+	}
+}
+
+func (c *Conn) clear() {
+	for {
+		select {
+		case data := <-c.writeChan:
+			if data != nil {
+				c.opts.putWriteData(data)
+			}
+		default:
 			return
 		}
 	}
@@ -185,16 +201,16 @@ func (c *Conn) read() {
 	}
 
 	for {
-		data, err := c.readMessage()
+		data, err := c.readData()
 		if err != nil {
-			slog.Info("tcp: conn read message",
+			slog.Info("tcp: conn read data",
 				slog.String("conn", c.String()), slog.Any("error", err))
 			return
 		}
 
-		err = c.handler.OnMessage(c, data)
+		err = c.handler.OnRead(c, data)
 		if err != nil {
-			slog.Error("tcp: conn on message",
+			slog.Error("tcp: conn on read",
 				slog.String("conn", c.String()), slog.Any("error", err))
 			return
 		}
@@ -214,21 +230,31 @@ func (c *Conn) write() {
 				return
 			}
 
-			if _, err := c.writeMessage(data); err != nil {
-				slog.Info("tcp: conn write message",
+			if _, err := c.writeData(data); err != nil {
+				slog.Info("tcp: conn write data",
 					slog.String("conn", c.String()), slog.Any("error", err))
+				c.opts.putWriteData(data)
 				return
 			}
+
+			if err := c.handler.OnWrite(c, data); err != nil {
+				slog.Info("tcp: conn on write",
+					slog.String("conn", c.String()), slog.Any("error", err))
+				c.opts.putWriteData(data)
+				return
+			}
+
+			c.opts.putWriteData(data)
 		}
 	}
 }
 
-func (c *Conn) readMessage() ([]byte, error) {
-	return c.reader.Read(c.conn, c.opts.maxReadMsgSize)
+func (c *Conn) readData() ([]byte, error) {
+	return c.reader.Read(c.conn, c.opts.maxReadDataSize, c.opts.getReadData)
 }
 
-func (c *Conn) writeMessage(data []byte) (int, error) {
-	return c.writer.Write(c.conn, data, c.opts.maxWriteMsgSize)
+func (c *Conn) writeData(data []byte) (int, error) {
+	return c.writer.Write(c.conn, data, c.opts.maxWriteDataSize)
 }
 
 func SetConnOptions(conn net.Conn, keepAlivePeriod time.Duration) error {
