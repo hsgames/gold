@@ -7,7 +7,7 @@ import (
 type Conn interface {
 	Shutdown()
 	Close()
-	Write(data []byte)
+	Write(data []byte) error
 	LocalAddr() net.Addr
 	RemoteAddr() net.Addr
 	UserData() any

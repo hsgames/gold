@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -10,6 +11,11 @@ import (
 
 	gnet "github.com/hsgames/gold/net"
 	"github.com/hsgames/gold/safe"
+)
+
+var (
+	ErrConnClosed        = errors.New("tcp: conn is closed")
+	ErrConnWriteChanFull = errors.New("tcp: conn write channel is full")
 )
 
 type Conn struct {
@@ -132,19 +138,19 @@ func (c *Conn) doClose(force bool) {
 	}
 }
 
-func (c *Conn) Write(data []byte) {
+func (c *Conn) Write(data []byte) error {
 	if c.IsClosed() {
 		c.opts.putWriteData(data)
-		return
+		return ErrConnClosed
 	}
 
 	select {
 	case c.writeChan <- data:
+		return nil
 	default:
-		slog.Info("tcp: conn write channel is full",
-			slog.String("conn", c.String()))
 		c.opts.putWriteData(data)
 		c.Close()
+		return ErrConnWriteChanFull
 	}
 }
 

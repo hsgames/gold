@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -11,6 +12,11 @@ import (
 	"github.com/gorilla/websocket"
 	gnet "github.com/hsgames/gold/net"
 	"github.com/hsgames/gold/safe"
+)
+
+var (
+	ErrConnClosed        = errors.New("ws: conn is closed")
+	ErrConnWriteChanFull = errors.New("ws: conn write channel is full")
 )
 
 type Conn struct {
@@ -129,19 +135,19 @@ func (c *Conn) doClose(force bool) {
 	}
 }
 
-func (c *Conn) Write(data []byte) {
+func (c *Conn) Write(data []byte) error {
 	if c.IsClosed() {
 		c.opts.putWriteData(data)
-		return
+		return ErrConnClosed
 	}
 
 	select {
 	case c.writeChan <- data:
+		return nil
 	default:
-		slog.Info("ws: conn write channel is full",
-			slog.String("conn", c.String()))
 		c.opts.putWriteData(data)
 		c.Close()
+		return ErrConnWriteChanFull
 	}
 }
 
