@@ -137,7 +137,6 @@ func (c *Conn) doClose(force bool) {
 
 func (c *Conn) Write(data []byte) error {
 	if c.IsClosed() {
-		c.opts.putWriteData(data)
 		return ErrConnClosed
 	}
 
@@ -145,8 +144,6 @@ func (c *Conn) Write(data []byte) error {
 	case c.writeChan <- data:
 		return nil
 	default:
-		c.opts.putWriteData(data)
-		c.Close()
 		return ErrConnWriteChanFull
 	}
 }
