@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
-	"sync/atomic"
 
 	"github.com/gorilla/websocket"
+	"github.com/hsgames/gold/id"
 	gnet "github.com/hsgames/gold/net"
 	"github.com/hsgames/gold/net/tcp"
 	"github.com/hsgames/gold/safe"
@@ -16,6 +16,7 @@ import (
 
 type Server struct {
 	*http.Server
+	id.Tmp
 
 	opts       options
 	name       string
@@ -154,8 +155,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 
 	conn.SetReadLimit(int64(s.opts.maxReadDataSize))
 
-	connId := atomic.AddUint64(&s.connId, 1)
-	name := fmt.Sprintf("%s_%d", s.Name(), connId)
+	name := fmt.Sprintf("%s-%d", s.Name(), s.Next())
 	c := newConn(name, conn, s.newHandler(), s.opts.connOptions)
 	s.conns[c] = struct{}{}
 	s.connsMu.Unlock()

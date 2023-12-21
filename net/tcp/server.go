@@ -9,11 +9,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hsgames/gold/id"
 	gnet "github.com/hsgames/gold/net"
 	"github.com/hsgames/gold/safe"
 )
 
 type Server struct {
+	id.Tmp
+
 	opts       options
 	name       string
 	network    string
@@ -24,7 +27,6 @@ type Server struct {
 	lis        net.Listener
 	connsMu    sync.Mutex
 	conns      map[*Conn]struct{}
-	connId     uint64
 	served     bool
 	shutdown   bool
 	closeOnce  sync.Once
@@ -227,8 +229,7 @@ func (s *Server) handleConn(conn net.Conn) {
 		return
 	}
 
-	s.connId++
-	name := fmt.Sprintf("%s_%d", s.name, s.connId)
+	name := fmt.Sprintf("%s-%d", s.name, s.Next())
 	c := newConn(name, conn, s.newHandler(), s.opts.connOptions)
 	s.conns[c] = struct{}{}
 

@@ -187,31 +187,21 @@ func (c *Conn) read() {
 	defer c.wg.Done()
 	defer c.close(false)
 
-	defer func() {
-		if err := c.handler.OnClose(c); err != nil {
-			slog.Error("ws: conn on close",
-				slog.String("conn", c.String()), slog.Any("error", err))
-		}
-	}()
+	defer c.handler.OnClose(c)
 
 	if err := c.handler.OnOpen(c); err != nil {
-		slog.Error("ws: conn on open",
-			slog.String("conn", c.String()), slog.Any("error", err))
 		return
 	}
 
 	for {
 		data, err := c.readData()
 		if err != nil {
-			slog.Info("ws: conn read data",
+			slog.Debug("ws: conn read data",
 				slog.String("conn", c.String()), slog.Any("error", err))
 			return
 		}
 
-		err = c.handler.OnRead(c, data)
-		if err != nil {
-			slog.Error("ws: conn on read",
-				slog.String("conn", c.String()), slog.Any("error", err))
+		if err = c.handler.OnRead(c, data); err != nil {
 			return
 		}
 	}
@@ -231,15 +221,13 @@ func (c *Conn) write() {
 			}
 
 			if _, err := c.writeData(data); err != nil {
-				slog.Info("ws: conn write data",
+				slog.Debug("ws: conn write data",
 					slog.String("conn", c.String()), slog.Any("error", err))
 				c.opts.putWriteData(data)
 				return
 			}
 
 			if err := c.handler.OnWrite(c, data); err != nil {
-				slog.Info("ws: conn on write",
-					slog.String("conn", c.String()), slog.Any("error", err))
 				c.opts.putWriteData(data)
 				return
 			}
