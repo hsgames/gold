@@ -14,8 +14,7 @@ type connOptions struct {
 	keepAlivePeriod  time.Duration
 	newReader        func() Reader
 	newWriter        func() Writer
-	getReadData      func(size int) []byte
-	putWriteData     func(b []byte)
+	withReadPool     bool
 }
 
 type options struct {
@@ -33,19 +32,18 @@ func defaultOptions() options {
 			keepAlivePeriod:  3 * time.Minute,
 			newReader:        defaultReader,
 			newWriter:        defaultWriter,
-			getReadData:      func(size int) []byte { return make([]byte, size) },
-			putWriteData:     func(b []byte) {},
+			withReadPool:     false,
 		},
 	}
 }
 
 func (o *options) check() error {
-	if o.maxReadDataSize <= 0 {
-		return fmt.Errorf("tcp: options maxReadDataSize [%d] <= 0", o.maxReadDataSize)
+	if o.maxReadDataSize < 0 {
+		return fmt.Errorf("tcp: options maxReadDataSize [%d] < 0", o.maxReadDataSize)
 	}
 
-	if o.maxWriteDataSize <= 0 {
-		return fmt.Errorf("tcp: options maxWriteDataSize [%d] <= 0", o.maxWriteDataSize)
+	if o.maxWriteDataSize < 0 {
+		return fmt.Errorf("tcp: options maxWriteDataSize [%d] < 0", o.maxWriteDataSize)
 	}
 
 	if o.newReader == nil {
@@ -54,14 +52,6 @@ func (o *options) check() error {
 
 	if o.newWriter == nil {
 		return errors.New("tcp: options newWriter is nil")
-	}
-
-	if o.getReadData == nil {
-		return errors.New("tcp: options getReadData is nil")
-	}
-
-	if o.putWriteData == nil {
-		return errors.New("tcp: options putWriteData is nil")
 	}
 
 	return nil
@@ -105,15 +95,9 @@ func WithWriter(newWriter func() Writer) Option {
 	}
 }
 
-func GetReadData(getReadData func(size int) []byte) Option {
+func WithReadPool() Option {
 	return func(o *options) {
-		o.getReadData = getReadData
-	}
-}
-
-func PutWriteData(putWriteData func(b []byte)) Option {
-	return func(o *options) {
-		o.putWriteData = putWriteData
+		o.withReadPool = true
 	}
 }
 

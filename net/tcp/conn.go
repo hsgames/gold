@@ -10,12 +10,14 @@ import (
 	"time"
 
 	gnet "github.com/hsgames/gold/net"
+	"github.com/hsgames/gold/pool/bytespool"
 	"github.com/hsgames/gold/safe"
 )
 
 var (
 	ErrConnClosed        = errors.New("tcp: conn is closed")
 	ErrConnWriteChanFull = errors.New("tcp: conn write channel is full")
+	ErrConnWriteDataNil  = errors.New("tcp: conn write data is nil")
 )
 
 type Conn struct {
@@ -139,14 +141,22 @@ func (c *Conn) doClose(force bool) {
 }
 
 func (c *Conn) Write(data []byte) error {
+	if data == nil {
+		return ErrConnWriteDataNil
+	}
+
 	if c.IsClosed() {
 		return ErrConnClosed
 	}
 
+	b := bytespool.Get(len(data))
+	copy(b, data)
+
 	select {
-	case c.writeChan <- data:
+	case c.writeChan <- b:
 		return nil
 	default:
+		bytespool.Put(b)
 		return ErrConnWriteChanFull
 	}
 }
@@ -178,7 +188,7 @@ func (c *Conn) clear() {
 		select {
 		case data := <-c.writeChan:
 			if data != nil {
-				c.opts.putWriteData(data)
+				bytespool.Put(data)
 			}
 		default:
 			return
@@ -226,22 +236,17 @@ func (c *Conn) write() {
 			if _, err := c.writeData(data); err != nil {
 				slog.Debug("tcp: conn write data",
 					slog.String("conn", c.String()), slog.Any("error", err))
-				c.opts.putWriteData(data)
+				bytespool.Put(data)
 				return
 			}
 
-			if err := c.handler.OnWrite(c, data); err != nil {
-				c.opts.putWriteData(data)
-				return
-			}
-
-			c.opts.putWriteData(data)
+			bytespool.Put(data)
 		}
 	}
 }
 
 func (c *Conn) readData() ([]byte, error) {
-	return c.reader.Read(c.conn, c.opts.maxReadDataSize, c.opts.getReadData)
+	return c.reader.Read(c.conn, c.opts.maxReadDataSize, c.opts.withReadPool)
 }
 
 func (c *Conn) writeData(data []byte) (int, error) {

@@ -11,7 +11,7 @@ import (
 )
 
 type Reader interface {
-	Read(conn net.Conn, maxReadDataSize int, getReadData func(size int) []byte) ([]byte, error)
+	Read(conn net.Conn, maxReadDataSize int, withReadPool bool) ([]byte, error)
 }
 
 type Writer interface {
@@ -30,16 +30,17 @@ const defaultHeaderSize = 2
 
 type reader struct{}
 
-func (r *reader) Read(conn net.Conn, maxReadDataSize int, getReadData func(size int) []byte) (data []byte, err error) {
+func (r *reader) Read(conn net.Conn, maxReadDataSize int, withReadPool bool) (data []byte, err error) {
 	var header [defaultHeaderSize]byte
 
 	if _, err = io.ReadFull(conn, header[:]); err != nil {
+		err = fmt.Errorf("tcp: reader read header error [%w]", err)
 		return
 	}
 
 	dataSize := int(binary.BigEndian.Uint16(header[:])) - defaultHeaderSize
-	if dataSize <= 0 {
-		err = fmt.Errorf("tcp: reader read data size [%d] <= 0", dataSize)
+	if dataSize < 0 {
+		err = fmt.Errorf("tcp: reader read data size [%d] < 0", dataSize)
 		return
 	}
 
@@ -48,26 +49,31 @@ func (r *reader) Read(conn net.Conn, maxReadDataSize int, getReadData func(size 
 		return
 	}
 
-	data = getReadData(dataSize)
+	if withReadPool {
+		data = bytespool.Get(dataSize)
+	} else {
+		data = make([]byte, dataSize)
+	}
 
-	_, err = io.ReadFull(conn, data)
+	if _, err = io.ReadFull(conn, data); err != nil {
+		err = fmt.Errorf("tcp: reader read data error [%w]", err)
+
+		if withReadPool {
+			bytespool.Put(data)
+		}
+		data = nil
+
+		return
+	}
 
 	return
-}
-
-func (r *reader) Release(data []byte) error {
-	bytespool.Put(data)
-	return nil
 }
 
 type writer struct{}
 
 func (w *writer) Write(conn net.Conn, data []byte, maxWriteDataSize int) (n int, err error) {
 	dataSize := len(data)
-	if dataSize <= 0 {
-		err = fmt.Errorf("tcp: writer write data size [%d] <= 0", dataSize)
-		return
-	}
+
 	if dataSize > maxWriteDataSize {
 		err = fmt.Errorf("tcp: writer write data size [%d] > [%d]", dataSize, maxWriteDataSize)
 		return
@@ -85,7 +91,10 @@ func (w *writer) Write(conn net.Conn, data []byte, maxWriteDataSize int) (n int,
 	binary.BigEndian.PutUint16(packet, uint16(headerValue))
 	copy(packet[defaultHeaderSize:], data)
 
-	n, err = conn.Write(packet)
+	if n, err = conn.Write(packet); err != nil {
+		err = fmt.Errorf("tcp: writer write packet error [%w]", err)
+		return
+	}
 
 	return
 }

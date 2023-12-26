@@ -68,6 +68,10 @@ func Get(size int) []byte {
 }
 
 func Put(b []byte) {
+	if cap(b) == 0 {
+		return
+	}
+
 	for _, v := range pools {
 		if cap(b) <= v.max {
 			v.put(b)

@@ -11,12 +11,14 @@ import (
 
 	"github.com/gorilla/websocket"
 	gnet "github.com/hsgames/gold/net"
+	"github.com/hsgames/gold/pool/bytespool"
 	"github.com/hsgames/gold/safe"
 )
 
 var (
 	ErrConnClosed        = errors.New("ws: conn is closed")
 	ErrConnWriteChanFull = errors.New("ws: conn write channel is full")
+	ErrConnWriteDataNil  = errors.New("ws: conn write data is nil")
 )
 
 type Conn struct {
@@ -136,14 +138,22 @@ func (c *Conn) doClose(force bool) {
 }
 
 func (c *Conn) Write(data []byte) error {
+	if data == nil {
+		return ErrConnWriteDataNil
+	}
+
 	if c.IsClosed() {
 		return ErrConnClosed
 	}
 
+	b := bytespool.Get(len(data))
+	copy(b, data)
+
 	select {
-	case c.writeChan <- data:
+	case c.writeChan <- b:
 		return nil
 	default:
+		bytespool.Put(b)
 		return ErrConnWriteChanFull
 	}
 }
@@ -175,7 +185,7 @@ func (c *Conn) clear() {
 		select {
 		case data := <-c.writeChan:
 			if data != nil {
-				c.opts.putWriteData(data)
+				bytespool.Put(data)
 			}
 		default:
 			return
@@ -223,16 +233,11 @@ func (c *Conn) write() {
 			if _, err := c.writeData(data); err != nil {
 				slog.Debug("ws: conn write data",
 					slog.String("conn", c.String()), slog.Any("error", err))
-				c.opts.putWriteData(data)
+				bytespool.Put(data)
 				return
 			}
 
-			if err := c.handler.OnWrite(c, data); err != nil {
-				c.opts.putWriteData(data)
-				return
-			}
-
-			c.opts.putWriteData(data)
+			bytespool.Put(data)
 		}
 	}
 }
@@ -241,6 +246,7 @@ func (c *Conn) readData() (data []byte, err error) {
 	var dataType int
 
 	if dataType, data, err = c.conn.ReadMessage(); err != nil {
+		err = fmt.Errorf("ws: conn [%s] read message error [%w]", c, err)
 		return
 	}
 
@@ -251,10 +257,6 @@ func (c *Conn) readData() (data []byte, err error) {
 	}
 
 	dataSize := len(data)
-	if dataSize <= 0 {
-		err = fmt.Errorf("ws: conn [%s] read data size [%d] <= 0", c, dataSize)
-		return
-	}
 
 	if dataSize > c.opts.maxReadDataSize {
 		err = fmt.Errorf("ws: conn [%s] read data size [%d] > [%d]",
@@ -267,10 +269,6 @@ func (c *Conn) readData() (data []byte, err error) {
 
 func (c *Conn) writeData(data []byte) (n int, err error) {
 	dataSize := len(data)
-	if dataSize <= 0 {
-		err = fmt.Errorf("ws: conn [%s] write data size [%d] <= 0", c, dataSize)
-		return
-	}
 
 	if dataSize > c.opts.maxWriteDataSize {
 		err = fmt.Errorf("ws: conn [%s] write data size [%d] > [%d]",
@@ -279,6 +277,7 @@ func (c *Conn) writeData(data []byte) (n int, err error) {
 	}
 
 	if err = c.conn.WriteMessage(c.opts.dataType, data); err != nil {
+		err = fmt.Errorf("ws: conn [%s] write message error [%w]", c, err)
 		return
 	}
 

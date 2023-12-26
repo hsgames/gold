@@ -1,7 +1,6 @@
 package ws
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -16,7 +15,6 @@ type connOptions struct {
 	maxWriteDataSize int
 	dataType         int
 	keepAlivePeriod  time.Duration
-	putWriteData     func(b []byte)
 }
 
 type options struct {
@@ -37,7 +35,6 @@ func defaultOptions() options {
 			maxWriteDataSize: math.MaxUint16,
 			dataType:         websocket.BinaryMessage,
 			keepAlivePeriod:  3 * time.Minute,
-			putWriteData:     func(b []byte) {},
 		},
 		pattern:     "/",
 		checkOrigin: func(_ *http.Request) bool { return true },
@@ -45,16 +42,12 @@ func defaultOptions() options {
 }
 
 func (o *options) check() error {
-	if o.maxReadDataSize <= 0 {
-		return fmt.Errorf("ws: options maxReadDataSize:[%d] <= 0", o.maxReadDataSize)
+	if o.maxReadDataSize < 0 {
+		return fmt.Errorf("ws: options maxReadDataSize:[%d] < 0", o.maxReadDataSize)
 	}
 
-	if o.maxWriteDataSize <= 0 {
-		return fmt.Errorf("ws: options maxWriteDataSize:[%d] <= 0", o.maxWriteDataSize)
-	}
-
-	if o.putWriteData == nil {
-		return errors.New("ws: options putWriteData is nil")
+	if o.maxWriteDataSize < 0 {
+		return fmt.Errorf("ws: options maxWriteDataSize:[%d] < 0", o.maxWriteDataSize)
 	}
 
 	return nil
@@ -95,12 +88,6 @@ func WithText() Option {
 func WithKeepAlivePeriod(keepAlivePeriod time.Duration) Option {
 	return func(o *options) {
 		o.keepAlivePeriod = keepAlivePeriod
-	}
-}
-
-func PutWriteData(putWriteData func(b []byte)) Option {
-	return func(o *options) {
-		o.putWriteData = putWriteData
 	}
 }
 
