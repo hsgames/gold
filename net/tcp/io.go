@@ -26,7 +26,7 @@ func defaultWriter() Writer {
 	return &writer{}
 }
 
-const defaultHeaderSize = 2
+const defaultHeaderSize = 4
 
 type reader struct{}
 
@@ -38,7 +38,7 @@ func (r *reader) Read(conn net.Conn, maxReadDataSize int, withReadPool bool) (da
 		return
 	}
 
-	dataSize := int(binary.BigEndian.Uint16(header[:])) - defaultHeaderSize
+	dataSize := int(binary.BigEndian.Uint32(header[:])) - defaultHeaderSize
 	if dataSize < 0 {
 		err = fmt.Errorf("tcp: reader read data size [%d] < 0", dataSize)
 		return
@@ -80,15 +80,15 @@ func (w *writer) Write(conn net.Conn, data []byte, maxWriteDataSize int) (n int,
 	}
 
 	headerValue := uint64(defaultHeaderSize) + uint64(dataSize)
-	if headerValue > math.MaxUint16 {
-		err = fmt.Errorf("tcp: writer write header value [%d] > math.MaxUint16", headerValue)
+	if headerValue > math.MaxUint32 {
+		err = fmt.Errorf("tcp: writer write header value [%d] > math.MaxUint32", headerValue)
 		return
 	}
 
 	packet := bytespool.Get(defaultHeaderSize + dataSize)
 	defer bytespool.Put(packet)
 
-	binary.BigEndian.PutUint16(packet, uint16(headerValue))
+	binary.BigEndian.PutUint32(packet, uint32(headerValue))
 	copy(packet[defaultHeaderSize:], data)
 
 	if n, err = conn.Write(packet); err != nil {
