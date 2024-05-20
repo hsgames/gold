@@ -10,11 +10,10 @@ import (
 )
 
 type connOptions struct {
-	writeChanSize    int
-	maxReadDataSize  int
-	maxWriteDataSize int
-	dataType         int
-	keepAlivePeriod  time.Duration
+	writeChanSize   int
+	readLimit       int
+	dataType        int
+	keepAlivePeriod time.Duration
 }
 
 type options struct {
@@ -30,11 +29,10 @@ type options struct {
 
 func defaultOptions() options {
 	return options{
-		connOptions: connOptions{writeChanSize: 200,
-			maxReadDataSize:  math.MaxUint16,
-			maxWriteDataSize: math.MaxUint16,
-			dataType:         websocket.BinaryMessage,
-			keepAlivePeriod:  3 * time.Minute,
+		connOptions: connOptions{writeChanSize: 128,
+			readLimit:       math.MaxUint16,
+			dataType:        websocket.BinaryMessage,
+			keepAlivePeriod: 3 * time.Minute,
 		},
 		pattern:     "/",
 		checkOrigin: func(_ *http.Request) bool { return true },
@@ -42,12 +40,8 @@ func defaultOptions() options {
 }
 
 func (o *options) check() error {
-	if o.maxReadDataSize < 0 {
-		return fmt.Errorf("ws: options maxReadDataSize:[%d] < 0", o.maxReadDataSize)
-	}
-
-	if o.maxWriteDataSize < 0 {
-		return fmt.Errorf("ws: options maxWriteDataSize:[%d] < 0", o.maxWriteDataSize)
+	if o.readLimit < 0 {
+		return fmt.Errorf("ws: options readLimit:[%d] < 0", o.readLimit)
 	}
 
 	return nil
@@ -61,15 +55,9 @@ func WithWriteChanSize(writeChanSize int) Option {
 	}
 }
 
-func WithMaxReadDataSize(maxReadDataSize int) Option {
+func WithReadLimit(readLimit int) Option {
 	return func(o *options) {
-		o.maxReadDataSize = maxReadDataSize
-	}
-}
-
-func WithMaxWriteDataSize(maxWriteDataSize int) Option {
-	return func(o *options) {
-		o.maxWriteDataSize = maxWriteDataSize
+		o.readLimit = readLimit
 	}
 }
 

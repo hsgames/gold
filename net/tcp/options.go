@@ -8,13 +8,12 @@ import (
 )
 
 type connOptions struct {
-	writeChanSize    int
-	maxReadDataSize  int
-	maxWriteDataSize int
-	keepAlivePeriod  time.Duration
-	newReader        func() Reader
-	newWriter        func() Writer
-	withReadPool     bool
+	writeChanSize   int
+	readLimit       int
+	keepAlivePeriod time.Duration
+	newReader       func() Reader
+	newWriter       func() Writer
+	withReadPool    bool
 }
 
 type options struct {
@@ -26,24 +25,19 @@ type options struct {
 func defaultOptions() options {
 	return options{
 		connOptions: connOptions{
-			writeChanSize:    200,
-			maxReadDataSize:  math.MaxUint16,
-			maxWriteDataSize: math.MaxUint16,
-			keepAlivePeriod:  3 * time.Minute,
-			newReader:        defaultReader,
-			newWriter:        defaultWriter,
-			withReadPool:     false,
+			writeChanSize:   128,
+			readLimit:       math.MaxUint16,
+			keepAlivePeriod: 3 * time.Minute,
+			newReader:       defaultReader,
+			newWriter:       defaultWriter,
+			withReadPool:    false,
 		},
 	}
 }
 
 func (o *options) check() error {
-	if o.maxReadDataSize < 0 {
-		return fmt.Errorf("tcp: options maxReadDataSize [%d] < 0", o.maxReadDataSize)
-	}
-
-	if o.maxWriteDataSize < 0 {
-		return fmt.Errorf("tcp: options maxWriteDataSize [%d] < 0", o.maxWriteDataSize)
+	if o.readLimit < 0 {
+		return fmt.Errorf("tcp: options readLimit [%d] < 0", o.readLimit)
 	}
 
 	if o.newReader == nil {
@@ -65,15 +59,9 @@ func WithWriteChanSize(writeChanSize int) Option {
 	}
 }
 
-func WithMaxReadDataSize(maxReadDataSize int) Option {
+func WithReadLimit(readLimit int) Option {
 	return func(o *options) {
-		o.maxReadDataSize = maxReadDataSize
-	}
-}
-
-func WithMaxWriteDataSize(maxWriteDataSize int) Option {
-	return func(o *options) {
-		o.maxWriteDataSize = maxWriteDataSize
+		o.readLimit = readLimit
 	}
 }
 

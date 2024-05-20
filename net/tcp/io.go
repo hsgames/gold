@@ -11,11 +11,11 @@ import (
 )
 
 type Reader interface {
-	Read(conn net.Conn, maxReadDataSize int, withReadPool bool) ([]byte, error)
+	Read(conn net.Conn, readLimit int, withReadPool bool) ([]byte, error)
 }
 
 type Writer interface {
-	Write(conn net.Conn, data []byte, maxWriteDataSize int) (int, error)
+	Write(conn net.Conn, data []byte) (int, error)
 }
 
 func defaultReader() Reader {
@@ -30,7 +30,7 @@ const defaultHeaderSize = 4
 
 type reader struct{}
 
-func (r *reader) Read(conn net.Conn, maxReadDataSize int, withReadPool bool) (data []byte, err error) {
+func (r *reader) Read(conn net.Conn, readLimit int, withReadPool bool) (data []byte, err error) {
 	var header [defaultHeaderSize]byte
 
 	if _, err = io.ReadFull(conn, header[:]); err != nil {
@@ -38,14 +38,15 @@ func (r *reader) Read(conn net.Conn, maxReadDataSize int, withReadPool bool) (da
 		return
 	}
 
-	dataSize := int(binary.BigEndian.Uint32(header[:])) - defaultHeaderSize
-	if dataSize < 0 {
-		err = fmt.Errorf("tcp: reader read data size [%d] < 0", dataSize)
+	headerValue := int(binary.BigEndian.Uint32(header[:]))
+	if headerValue > readLimit {
+		err = fmt.Errorf("tcp: reader read packet size [%d] > [%d]", headerValue, readLimit)
 		return
 	}
 
-	if dataSize > maxReadDataSize {
-		err = fmt.Errorf("tcp: reader read data size [%d] > [%d]", dataSize, maxReadDataSize)
+	dataSize := headerValue - defaultHeaderSize
+	if dataSize < 0 {
+		err = fmt.Errorf("tcp: reader read data size [%d] < 0", dataSize)
 		return
 	}
 
@@ -71,13 +72,8 @@ func (r *reader) Read(conn net.Conn, maxReadDataSize int, withReadPool bool) (da
 
 type writer struct{}
 
-func (w *writer) Write(conn net.Conn, data []byte, maxWriteDataSize int) (n int, err error) {
+func (w *writer) Write(conn net.Conn, data []byte) (n int, err error) {
 	dataSize := len(data)
-
-	if dataSize > maxWriteDataSize {
-		err = fmt.Errorf("tcp: writer write data size [%d] > [%d]", dataSize, maxWriteDataSize)
-		return
-	}
 
 	headerValue := uint64(defaultHeaderSize) + uint64(dataSize)
 	if headerValue > math.MaxUint32 {

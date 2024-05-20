@@ -256,26 +256,10 @@ func (c *Conn) readData() (data []byte, err error) {
 		return
 	}
 
-	dataSize := len(data)
-
-	if dataSize > c.opts.maxReadDataSize {
-		err = fmt.Errorf("ws: conn [%s] read data size [%d] > [%d]",
-			c, dataSize, c.opts.maxReadDataSize)
-		return
-	}
-
 	return
 }
 
 func (c *Conn) writeData(data []byte) (n int, err error) {
-	dataSize := len(data)
-
-	if dataSize > c.opts.maxWriteDataSize {
-		err = fmt.Errorf("ws: conn [%s] write data size [%d] > [%d]",
-			c, dataSize, c.opts.maxWriteDataSize)
-		return
-	}
-
 	if err = c.conn.WriteMessage(c.opts.dataType, data); err != nil {
 		err = fmt.Errorf("ws: conn [%s] write message error [%w]", c, err)
 		return

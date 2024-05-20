@@ -153,7 +153,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn.SetReadLimit(int64(s.opts.maxReadDataSize))
+	conn.SetReadLimit(int64(s.opts.readLimit))
 
 	name := fmt.Sprintf("%s-%d", s.Name(), s.Next())
 	c := newConn(name, conn, s.newHandler(), s.opts.connOptions)

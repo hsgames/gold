@@ -246,11 +246,11 @@ func (c *Conn) write() {
 }
 
 func (c *Conn) readData() ([]byte, error) {
-	return c.reader.Read(c.conn, c.opts.maxReadDataSize, c.opts.withReadPool)
+	return c.reader.Read(c.conn, c.opts.readLimit, c.opts.withReadPool)
 }
 
 func (c *Conn) writeData(data []byte) (int, error) {
-	return c.writer.Write(c.conn, data, c.opts.maxWriteDataSize)
+	return c.writer.Write(c.conn, data)
 }
 
 func SetConnOptions(conn net.Conn, keepAlivePeriod time.Duration) error {
