@@ -2,7 +2,6 @@ package ws
 
 import (
 	"fmt"
-	"math"
 	"net/http"
 	"time"
 
@@ -30,7 +29,6 @@ type options struct {
 func defaultOptions() options {
 	return options{
 		connOptions: connOptions{writeChanSize: 128,
-			readLimit:       math.MaxUint16,
 			dataType:        websocket.BinaryMessage,
 			keepAlivePeriod: 3 * time.Minute,
 		},

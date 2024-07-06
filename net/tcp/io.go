@@ -39,7 +39,7 @@ func (r *reader) Read(conn net.Conn, readLimit int, withReadPool bool) (data []b
 	}
 
 	headerValue := int(binary.BigEndian.Uint32(header[:]))
-	if headerValue > readLimit {
+	if readLimit > 0 && headerValue > readLimit {
 		err = fmt.Errorf("tcp: reader read packet size [%d] > [%d]", headerValue, readLimit)
 		return
 	}

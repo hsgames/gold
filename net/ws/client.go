@@ -68,6 +68,8 @@ func (c *Client) Dial(ctx context.Context) (gnet.Conn, error) {
 		return nil, fmt.Errorf("ws: client [%s] set conn options error [%w]", c, err)
 	}
 
+	conn.SetReadLimit(int64(c.opts.readLimit))
+
 	wc := newConn(c.name, conn, c.newHandler(), c.opts.connOptions)
 
 	safe.Go(wc.serve)

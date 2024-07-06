@@ -3,7 +3,6 @@ package tcp
 import (
 	"errors"
 	"fmt"
-	"math"
 	"time"
 )
 
@@ -26,7 +25,6 @@ func defaultOptions() options {
 	return options{
 		connOptions: connOptions{
 			writeChanSize:   128,
-			readLimit:       math.MaxUint16,
 			keepAlivePeriod: 3 * time.Minute,
 			newReader:       defaultReader,
 			newWriter:       defaultWriter,
