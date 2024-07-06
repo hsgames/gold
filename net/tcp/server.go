@@ -24,7 +24,7 @@ type Server struct {
 	newHandler func() gnet.Handler
 	serveWg    sync.WaitGroup
 	mu         sync.Mutex
-	lis        net.Listener
+	ln         net.Listener
 	connsMu    sync.Mutex
 	conns      map[*Conn]struct{}
 	served     bool
@@ -60,10 +60,6 @@ func NewServer(name, network, addr string,
 }
 
 func (s *Server) String() string {
-	if addr := s.Addr(); addr != nil {
-		return fmt.Sprintf("[name:%s][listen_addr:%s]", s.Name(), s.Addr())
-	}
-
 	return fmt.Sprintf("[name:%s][listen_addr:%s]", s.Name(), s.addr)
 }
 
@@ -71,15 +67,8 @@ func (s *Server) Name() string {
 	return s.name
 }
 
-func (s *Server) Addr() net.Addr {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.lis != nil {
-		return s.lis.Addr()
-	}
-
-	return nil
+func (s *Server) Addr() string {
+	return s.addr
 }
 
 func (s *Server) ConnNum() int {
@@ -88,51 +77,19 @@ func (s *Server) ConnNum() int {
 	return len(s.conns)
 }
 
-func (s *Server) ListenAndServe() error {
-	if err := s.Listen(); err != nil {
-		return err
-	}
-	return s.Serve()
-}
-
-func (s *Server) Listen() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.shutdown {
-		return fmt.Errorf("tcp: server [%s] is already shutdown", s)
-	}
-
-	if s.lis != nil {
-		return fmt.Errorf("tcp: server [%s] is already listened", s)
-	}
-
-	lis, err := net.Listen(s.network, s.addr)
-	if err != nil {
-		return fmt.Errorf("tcp: server [%s] listen error [%w]", s.addr, err)
-	}
-
-	s.lis = lis
-
-	return nil
-}
-
-func (s *Server) Serve() error {
+func (s *Server) ListenAndServe() (err error) {
 	s.mu.Lock()
 
 	if s.shutdown {
 		s.mu.Unlock()
-		return fmt.Errorf("tcp: server [%s] is already shutdown", s)
+		err = fmt.Errorf("tcp: server [%s] is already shutdown", s)
+		return
 	}
 
 	if s.served {
 		s.mu.Unlock()
-		return fmt.Errorf("tcp: server [%s] is already served", s)
-	}
-
-	if s.lis == nil {
-		s.mu.Unlock()
-		return fmt.Errorf("tcp: server [%s] no listener", s)
+		err = fmt.Errorf("tcp: server [%s] is already served", s)
+		return
 	}
 
 	s.served = true
@@ -142,18 +99,25 @@ func (s *Server) Serve() error {
 
 	s.mu.Unlock()
 
+	if s.ln, err = net.Listen(s.network, s.addr); err != nil {
+		err = fmt.Errorf("tcp: server [%s] listen error [%w]", s.addr, err)
+		return
+	}
+
 	defer func() {
-		if err := s.close(); err != nil {
+		if err = s.ln.Close(); err != nil {
 			slog.Error("tcp: server close",
 				slog.String("server", s.String()), slog.Any("error", err))
 		}
 	}()
 
-	var tempDelay time.Duration
+	var (
+		tempDelay time.Duration
+		conn      net.Conn
+	)
 
 	for {
-		conn, err := s.lis.Accept()
-		if err != nil {
+		if conn, err = s.ln.Accept(); err != nil {
 			select {
 			case <-s.doneChan:
 				return nil
@@ -255,9 +219,11 @@ func (s *Server) Shutdown(ctx context.Context) {
 
 	close(s.doneChan)
 
-	if err := s.close(); err != nil {
-		slog.Error("tcp: server close",
-			slog.String("server", s.String()), slog.Any("error", err))
+	if s.ln != nil {
+		if err := s.ln.Close(); err != nil {
+			slog.Error("tcp: server close",
+				slog.String("server", s.String()), slog.Any("error", err))
+		}
 	}
 
 	s.serveWg.Wait()
@@ -277,14 +243,4 @@ func (s *Server) Shutdown(ctx context.Context) {
 			return
 		}
 	}
-}
-
-func (s *Server) close() (err error) {
-	if s.lis != nil {
-		s.closeOnce.Do(func() {
-			err = s.lis.Close()
-		})
-	}
-
-	return
 }
