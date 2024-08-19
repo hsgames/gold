@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
-
 	gnet "github.com/hsgames/gold/net"
+	"github.com/hsgames/gold/net/internal"
 	"github.com/hsgames/gold/safe"
+	"net"
 )
 
 type Client struct {
@@ -69,7 +69,7 @@ func (c *Client) Dial(ctx context.Context) (gnet.Conn, error) {
 		return nil, fmt.Errorf("tcp: client [%s] set conn options error [%w]", c, err)
 	}
 
-	tc := newConn(c.name, conn, c.newHandler(), c.opts.connOptions)
+	tc := newConn(internal.NextId(), c.name, conn, c.newHandler(), c.opts.connOptions)
 
 	safe.Go(tc.serve)
 

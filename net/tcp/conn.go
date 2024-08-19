@@ -22,6 +22,7 @@ var (
 
 type Conn struct {
 	opts         connOptions
+	id           uint64
 	name         string
 	conn         net.Conn
 	wg           sync.WaitGroup
@@ -39,10 +40,13 @@ type Conn struct {
 	userData     any
 }
 
-func newConn(name string, conn net.Conn, handler gnet.Handler, opts connOptions) *Conn {
+func newConn(id uint64, name string, conn net.Conn,
+	handler gnet.Handler, opts connOptions) *Conn {
+
 	return &Conn{
 		opts:         opts,
-		name:         name,
+		id:           id,
+		name:         fmt.Sprintf("%s-%d", name, id),
 		conn:         conn,
 		handler:      handler,
 		reader:       opts.newReader(),
@@ -58,6 +62,10 @@ func newConn(name string, conn net.Conn, handler gnet.Handler, opts connOptions)
 func (c *Conn) String() string {
 	return fmt.Sprintf("[name:%s][local_addr:%s][remote_addr:%s]",
 		c.Name(), c.LocalAddr(), c.RemoteAddr())
+}
+
+func (c *Conn) Id() uint64 {
+	return c.id
 }
 
 func (c *Conn) Name() string {

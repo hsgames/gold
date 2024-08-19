@@ -15,6 +15,8 @@ type Conn interface {
 	IsClosed() bool
 	Done() chan struct{}
 	String() string
+	Id() uint64
+	Name() string
 }
 
 type Handler interface {

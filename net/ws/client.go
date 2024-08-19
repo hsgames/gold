@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
 	"github.com/gorilla/websocket"
 	gnet "github.com/hsgames/gold/net"
+	"github.com/hsgames/gold/net/internal"
 	"github.com/hsgames/gold/net/tcp"
 	"github.com/hsgames/gold/safe"
 )
@@ -70,7 +70,7 @@ func (c *Client) Dial(ctx context.Context) (gnet.Conn, error) {
 
 	conn.SetReadLimit(int64(c.opts.readLimit))
 
-	wc := newConn(c.name, conn, c.newHandler(), c.opts.connOptions)
+	wc := newConn(internal.NextId(), c.name, conn, c.newHandler(), c.opts.connOptions)
 
 	safe.Go(wc.serve)
 

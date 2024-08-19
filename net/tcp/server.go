@@ -4,19 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/hsgames/gold/net/internal"
 	"log/slog"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/hsgames/gold/id"
 	gnet "github.com/hsgames/gold/net"
 	"github.com/hsgames/gold/safe"
 )
 
 type Server struct {
-	id.Tmp
-
 	opts       options
 	name       string
 	network    string
@@ -193,8 +191,7 @@ func (s *Server) handleConn(conn net.Conn) {
 		return
 	}
 
-	name := fmt.Sprintf("%s-%d", s.name, s.Next())
-	c := newConn(name, conn, s.newHandler(), s.opts.connOptions)
+	c := newConn(internal.NextId(), s.name, conn, s.newHandler(), s.opts.connOptions)
 	s.conns[c] = struct{}{}
 
 	s.connsMu.Unlock()

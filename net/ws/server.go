@@ -3,20 +3,18 @@ package ws
 import (
 	"context"
 	"fmt"
+	"github.com/gorilla/websocket"
+	gnet "github.com/hsgames/gold/net"
+	"github.com/hsgames/gold/net/internal"
+	"github.com/hsgames/gold/net/tcp"
+	"github.com/hsgames/gold/safe"
 	"log/slog"
 	"net/http"
 	"sync"
-
-	"github.com/gorilla/websocket"
-	"github.com/hsgames/gold/id"
-	gnet "github.com/hsgames/gold/net"
-	"github.com/hsgames/gold/net/tcp"
-	"github.com/hsgames/gold/safe"
 )
 
 type Server struct {
 	*http.Server
-	id.Tmp
 
 	opts       options
 	name       string
@@ -24,7 +22,6 @@ type Server struct {
 	upgrader   *websocket.Upgrader
 	connsMu    sync.Mutex
 	conns      map[*Conn]struct{}
-	connId     uint64
 }
 
 func NewServer(name, addr string,
@@ -155,8 +152,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 
 	conn.SetReadLimit(int64(s.opts.readLimit))
 
-	name := fmt.Sprintf("%s-%d", s.Name(), s.Next())
-	c := newConn(name, conn, s.newHandler(), s.opts.connOptions)
+	c := newConn(internal.NextId(), s.name, conn, s.newHandler(), s.opts.connOptions)
 	s.conns[c] = struct{}{}
 	s.connsMu.Unlock()
 
