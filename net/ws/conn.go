@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -133,9 +134,20 @@ func (c *Conn) doClose(force bool) {
 	defer close(c.wakeupChan)
 
 	if force {
-		if err := c.conn.NetConn().(*net.TCPConn).SetLinger(0); err != nil {
-			slog.Error("ws: conn close set linger",
-				slog.String("conn", c.String()), slog.Any("error", err))
+		var tc *net.TCPConn
+
+		switch c.conn.NetConn().(type) {
+		case *net.TCPConn:
+			tc = c.conn.NetConn().(*net.TCPConn)
+		case *tls.Conn:
+			tc = c.conn.NetConn().(*tls.Conn).NetConn().(*net.TCPConn)
+		}
+
+		if tc != nil {
+			if err := c.conn.NetConn().(*net.TCPConn).SetLinger(0); err != nil {
+				slog.Error("ws: conn close set linger",
+					slog.String("conn", c.String()), slog.Any("error", err))
+			}
 		}
 	}
 
