@@ -144,7 +144,7 @@ func (c *Conn) doClose(force bool) {
 		}
 
 		if tc != nil {
-			if err := c.conn.NetConn().(*net.TCPConn).SetLinger(0); err != nil {
+			if err := tc.SetLinger(0); err != nil {
 				slog.Error("ws: conn close set linger",
 					slog.String("conn", c.String()), slog.Any("error", err))
 			}
