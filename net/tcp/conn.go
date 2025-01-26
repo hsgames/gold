@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -263,12 +264,23 @@ func (c *Conn) writeData(data []byte) (int, error) {
 
 func SetConnOptions(conn net.Conn, keepAlivePeriod time.Duration) error {
 	if keepAlivePeriod > 0 {
-		if err := conn.(*net.TCPConn).SetKeepAlive(true); err != nil {
-			return fmt.Errorf("tcp: set conn [%s] keep alive error [%w]", conn, err)
+		var tc *net.TCPConn
+
+		switch conn.(type) {
+		case *net.TCPConn:
+			tc = conn.(*net.TCPConn)
+		case *tls.Conn:
+			tc = conn.(*tls.Conn).NetConn().(*net.TCPConn)
 		}
 
-		if err := conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlivePeriod); err != nil {
-			return fmt.Errorf("tcp: set conn [%s] keep alive period error [%w]", conn, err)
+		if tc != nil {
+			if err := tc.SetKeepAlive(true); err != nil {
+				return fmt.Errorf("tcp: set conn [%s] keep alive error [%w]", conn, err)
+			}
+
+			if err := tc.SetKeepAlivePeriod(keepAlivePeriod); err != nil {
+				return fmt.Errorf("tcp: set conn [%s] keep alive period error [%w]", conn, err)
+			}
 		}
 	}
 
